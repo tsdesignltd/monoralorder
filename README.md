@@ -14,27 +14,25 @@
 - 日本語フォントを埋め込んだPDFの直接ダウンロード、印刷、複数ページ対応
 - 発行済み帳票のスナップショット保存
 - 請求済みの伝票を月締めから除外し、DBの一意制約で二重請求を防止
-- サーバー側認証、ユーザー単位のデータ分離、編集の競合検知
+- Supabase認証、事務所・倉庫の共有データ、編集の競合検知
 - JSONバックアップ書き出し、スマートフォン対応
 
-## 接続前の状態
+## GitHub Pages版
 
-Supabaseの専用プロジェクトは未作成です。接続情報が未設定の場合、本番への保存は無効です。
-「デモを試す」で架空データを操作できます。デモはメモリ内だけで、再読み込み時に消えます。
-デモは本番データへ自動移行されません。
+画面はGitHub Pages、APIはSupabase Edge Functions `monoral-api`、認証はSupabase Authです。ChatGPTログインは使いません。
+事務所ID `monoral`、倉庫ID `monoralorder` を内部認証識別子に変換してログインします。メール送信を使わないID方式なので、パスワード紛失時は管理者が再設定します。
+両アカウントは `monoral_members` の登録によって共通ワークスペース `monoral` に接続します。新規登録しただけのアカウントには業務データへの権限がありません。
 
-## Supabaseの初期設定
+- `npm run build:pages`: 静的画面を `dist-pages` に生成
+- `npm run build:edge`: APIソース `edge/` を単一ファイルに生成
+- GitHub Settings → Pages → Source を GitHub Actions に設定
+- Edge Functionは内部でAuthサーバーに本人確認し、メンバー表を照合します。旧JWT共有秘密鍵の検証は使用しません。
+- `SUPABASE_SERVICE_ROLE_KEY` はEdge Function内だけで使用します。画面には公開可能キーのみを含めます。
+- 初期スキーマは `supabase/001_monoral.sql`、共有アクセス用は `supabase/shared-access.sql`。メンバー追加は管理者のみ実行します。
+- 旧ChatGPT Sitesのサーバールートは移行参照用です。現在のAPIソースは `edge/handlers` です。
 
-1. MONORAL専用のSupabaseプロジェクトを作成します。
-2. SQL Editorで `supabase/001_monoral.sql` を一度実行します。
-3. Webホストのサーバー環境変数に `SUPABASE_URL` と `SUPABASE_SECRET_KEY` を設定します。
-4. Webアプリを再読み込みして「Supabase 接続済み」を確認します。
-5. 自社情報に発行元住所・登録番号・振込先を登録します。
-
-秘密キーはサーバー専用です。GitHub、ブラウザーコード、公開環境変数（NEXT_PUBLIC_等）へ置かないでください。
-公開キーで顧客テーブルを直接読む方式は使いません。RLSを有効にし、anon/authenticatedのテーブル権限を剥奪しています。
-Sitesの認証済みユーザーIDをすべてのDB操作で検証・限定します。
-現状は同一アカウントで複数端末から利用する仕様です。別アカウントとの共有運用は別途メンバー権限の実装が必要です。
+Supabaseでは業務テーブルのRLSを有効にし、ブラウザからの直接操作を禁止しています。受注のバージョンによる上書き防止と、請求伝票の一意制約を維持しています。
+発行済み帳票は商品・顧客・自社情報のコピーを保存します。顧客・2026年販売データの移行は別工程です。
 
 ## 顧客の移行
 
@@ -88,3 +86,4 @@ Supabaseの実環境との結合テストは、プロジェクト作成・接続
 PDF: Noto Sans CJK JP Regular / SIL Open Font License 1.1。
 Source: https://github.com/notofonts/noto-cjk/blob/main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf
 ライセンスは `public/fonts/OFL.txt` に同梱。Web表示はDM Sans / Noto Sans JPを使用。
+

@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "../lib/client-api";
 import { useState } from "react";
 import { parseCustomerImport } from "../lib/customer-import";
 import { type Customer, type Row } from "../lib/model";
@@ -55,7 +56,7 @@ export default function CustomerImporter({
             onClick={async () => {
               setBusy(true);
               try {
-                const res = await fetch("/api/import-customers", {
+                const res = await apiFetch("/api/import-customers", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ customers }),
@@ -87,3 +88,4 @@ export default function CustomerImporter({
     </section>
   );
 }
+

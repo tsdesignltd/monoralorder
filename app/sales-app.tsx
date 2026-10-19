@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "../lib/client-api";
 import { useState, useEffect, type FormEvent } from "react";
 import {
   LayoutDashboard,
@@ -120,7 +121,7 @@ export default function SalesApp({ userName }: { userName: string }) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/records");
+      const res = await apiFetch("/api/records");
       const body = (await res.json()) as {
         error: string;
         configured: boolean;
@@ -195,7 +196,7 @@ export default function SalesApp({ userName }: { userName: string }) {
       setRows((old) => [record, ...old.filter((r) => r.id !== record.id)]);
       return record;
     }
-    const res = await fetch("/api/records", {
+    const res = await apiFetch("/api/records", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ kind, data, id: row?.id, version: row?.version }),
@@ -393,7 +394,7 @@ export default function SalesApp({ userName }: { userName: string }) {
           ),
         );
       } else {
-        const res = await fetch("/api/monthly", {
+        const res = await apiFetch("/api/monthly", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -516,7 +517,7 @@ export default function SalesApp({ userName }: { userName: string }) {
       <aside className="sidebar">
         <div className="brand">
           <div>
-            <span className="monoral-logo"><img src="/brand/monoral_h6.png" alt="MONORAL" /></span><small>ORDER MANAGEMENT</small>
+            <span className="monoral-logo"><img src="./brand/monoral_h6.png" alt="MONORAL" /></span><small>ORDER MANAGEMENT</small>
           </div>
         </div>
         <div className="workspace">
@@ -1782,7 +1783,7 @@ function Document({ row, demo }: { row: Row<DocumentData>; demo: boolean }) {
     <article className="paper">
       {demo && <div className="demo-watermark">SAMPLE — デモ帳票</div>}
       <header className="paper-header">
-        <span className="monoral-logo"><img src="/brand/monoral_h6.png" alt="MONORAL" /></span>
+        <span className="monoral-logo"><img src="./brand/monoral_h6.png" alt="MONORAL" /></span>
         <div>
           <h1>{d.type}</h1>
           <p>
@@ -1919,3 +1920,4 @@ function Document({ row, demo }: { row: Row<DocumentData>; demo: boolean }) {
     </article>
   );
 }
+

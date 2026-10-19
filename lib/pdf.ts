@@ -236,9 +236,9 @@ export async function downloadDocumentPdf(
   row: Row<DocumentData>,
   demo = false,
 ) {
-  const response = await fetch("/fonts/NotoSansJP.otf");
+  const response = await fetch("./fonts/NotoSansJP.otf");
   if (!response.ok) throw new Error("PDF用フォントを読み込めません");
-  const logoResponse = await fetch("/brand/monoral_h6.png");
+  const logoResponse = await fetch("./brand/monoral_h6.png");
   if (!logoResponse.ok) throw new Error("ロゴを読み込めません");
   const bytes = await createDocumentPdf(
     row,
