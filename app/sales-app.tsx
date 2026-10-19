@@ -64,11 +64,11 @@ const nav = [
   { id: "company", label: "自社情報", icon: Settings },
 ] as const;
 const titles = {
-  order: ["Orders", "受注管理"],
-  customer: ["Customers", "顧客管理"],
-  product: ["Products", "商品管理"],
-  document: ["Documents", "帳票管理"],
-  company: ["Company", "自社情報"],
+  order: "受注管理",
+  customer: "顧客管理",
+  product: "商品管理",
+  document: "帳票管理",
+  company: "自社情報",
 };
 const kinds = {
   customer: "顧客",
@@ -519,12 +519,12 @@ export default function SalesApp({ userName }: { userName: string }) {
       <aside className="sidebar">
         <div className="brand">
           <div>
-            <span className="monoral-logo"><img src="./brand/monoral_h6.png" alt="MONORAL" /></span><small>ORDER MANAGEMENT</small>
+            <span className="monoral-logo"><img src="./brand/monoral_h6.png" alt="MONORAL" /></span>
           </div>
         </div>
         <div className="workspace">
           <span className="workspace-dot" />
-          MONORAL 販売管理<small>WORKSPACE</small>
+          MONORAL 販売管理
         </div>
         <nav>
           {nav.map((n) => (
@@ -591,8 +591,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                   timeZone: "Asia/Tokyo", weekday: "long",
                 }).format(new Date())}）</h1>
               ) : <>
-              <p className="eyebrow">{titles[page][0]}</p>
-              <h1>{titles[page][1]}</h1>
+              <h1>{titles[page]}</h1>
               <p className="subheading">
                 {page === "order"
                     ? "ご注文の進行状況と明細をまとめて管理。"
@@ -1090,13 +1089,13 @@ export default function SalesApp({ userName }: { userName: string }) {
             </>
           )}
           <footer className="footer">
-            <span>MONORAL / ORDER MANAGEMENT</span>
+            <span>MONORAL 販売管理</span>
             <span>
               {demo
-                ? "DEMO — サンプルデータ"
+                ? "サンプルデータ"
                 : connected
-                  ? "PRIVATE WORKSPACE"
-                  : "SETUP REQUIRED"}
+                  ? "共有データに接続済み"
+                  : "接続設定が必要です"}
             </span>
           </footer>
         </div>
@@ -1120,7 +1119,7 @@ export default function SalesApp({ userName }: { userName: string }) {
               <div className="modal-header">
                 <div>
                   <p className="eyebrow">
-                    {editing.row ? number(editing.row) : "NEW RECORD"}
+                    {editing.row ? number(editing.row) : "新規登録"}
                   </p>
                   <h2>
                     {kinds[editing.kind]}
@@ -1790,7 +1789,7 @@ function Document({ row, demo }: { row: Row<DocumentData>; demo: boolean }) {
     t = orderTotals(d.order);
   return (
     <article className="paper">
-      {demo && <div className="demo-watermark">SAMPLE — デモ帳票</div>}
+      {demo && <div className="demo-watermark">サンプル — デモ帳票</div>}
       <header className="paper-header">
         <span className="monoral-logo"><img src="./brand/monoral_h6.png" alt="MONORAL" /></span>
         <div>
