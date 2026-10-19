@@ -1,0 +1,245 @@
+import { z } from "zod";
+const text = z.string().trim().max(2000),
+  required = z.string().trim().min(1, "必須項目を入力してください").max(200);
+const date = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine(
+    (v) =>
+      !isNaN(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v,
+  );
+const optionalDate = z.union([date, z.literal("")]);
+export const categories = [
+  "アウトドアショップ",
+  "自転車店",
+  "代理店",
+  "その他",
+] as const;
+export const businessTypes = ["卸販売", "サンプル販売", "返品処理"] as const;
+export const documentTypes = [
+  "見積書",
+  "納品書",
+  "請求書",
+  "納品請求書",
+  "合計請求書",
+] as const;
+export const customerSchema = z.object({
+  name: required,
+  contact: text,
+  address: text,
+  postal: text,
+  email: text,
+  phone: text,
+  note: text,
+  category: z.enum(categories),
+  legacyId: text.default(""),
+  fax: text.default(""),
+});
+export const productSchema = z.object({
+  name: required,
+  sku: required,
+  price: z.number().int().min(0).max(100000000),
+  unit: required,
+  tax: z.union([z.literal(0), z.literal(8), z.literal(10)]),
+  note: text,
+});
+export const lineSchema = z.object({
+  productId: z.string(),
+  name: required,
+  sku: text,
+  qty: z.number().int().min(1).max(10000),
+  unit: required,
+  price: z.number().int().min(0).max(100000000),
+  tax: z.union([z.literal(0), z.literal(8), z.literal(10)]),
+});
+export const orderSchema = z.object({
+  customerId: z.string().uuid(),
+  title: required,
+  date,
+  deliveryDate: optionalDate,
+  dueDate: optionalDate,
+  status: z.enum(["見積中", "受注確定", "出荷済", "完了", "キャンセル"]),
+  businessType: z.enum(businessTypes),
+  wholesaleRate: z
+    .number()
+    .min(0)
+    .max(100)
+    .refine((v) => Number.isInteger(v * 100), "小数第2位まで指定してください"),
+  note: text,
+  items: z.array(lineSchema).min(1).max(100),
+});
+export const companySchema = z.object({
+  name: required,
+  address: text,
+  postal: text,
+  phone: text,
+  email: z.union([z.string().email(), z.literal("")]),
+  registration: text,
+  bank: text,
+  note: text,
+});
+export type Customer = z.infer<typeof customerSchema>;
+export type Product = z.infer<typeof productSchema>;
+export type Order = z.infer<typeof orderSchema>;
+export type Company = z.infer<typeof companySchema>;
+export type Line = z.infer<typeof lineSchema>;
+export type DocumentData = {
+  type: (typeof documentTypes)[number];
+  date: string;
+  orderId: string;
+  orderNumber: string;
+  customer: Customer;
+  company: Company;
+  order: Order;
+  monthly?: {
+    month: string;
+    previousBalance: number;
+    payment: number;
+    orders: {
+      id: string;
+      number: string;
+      date: string;
+      title: string;
+      total: number;
+    }[];
+  };
+};
+export type Kind = "customer" | "product" | "order" | "company" | "document";
+export type Data = Customer | Product | Order | Company | DocumentData;
+export type Row<T = Data> = {
+  id: string;
+  seq: number;
+  kind: Kind;
+  data: T;
+  version: number;
+  created_at: string;
+  updated_at: string;
+};
+export const emptyCustomer: Customer = {
+  name: "",
+  contact: "",
+  address: "",
+  postal: "",
+  email: "",
+  phone: "",
+  note: "",
+  category: "その他",
+  legacyId: "",
+  fax: "",
+};
+export const emptyProduct: Product = {
+  name: "",
+  sku: "",
+  price: 0,
+  unit: "個",
+  tax: 10,
+  note: "",
+};
+export const emptyCompany: Company = {
+  name: "MONORAL",
+  address: "",
+  postal: "",
+  phone: "",
+  email: "",
+  registration: "",
+  bank: "",
+  note: "",
+};
+export const today = () =>
+  new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+export const money = (v: number) =>
+  new Intl.NumberFormat("ja-JP", {
+    style: "currency",
+    currency: "JPY",
+    maximumFractionDigits: 0,
+  }).format(v);
+export function unitPrice(price: number, rate: number) {
+  return Math.floor((price * Math.round(rate * 100)) / 10000);
+}
+export function pricedLines(order: Order): Line[] {
+  return order.items.map((i) => ({
+    ...i,
+    price: unitPrice(i.price, order.wholesaleRate),
+    qty: i.qty * (order.businessType === "返品処理" ? -1 : 1),
+  }));
+}
+export function totals(items: Line[]) {
+  const groups = [0, 8, 10]
+    .map((rate) => {
+      const subtotal = items
+        .filter((i) => i.tax === rate)
+        .reduce((s, i) => s + i.qty * i.price, 0);
+      return { rate, subtotal, tax: Math.trunc((subtotal * rate) / 100) };
+    })
+    .filter((g) => g.subtotal !== 0);
+  const subtotal = items.reduce((s, i) => s + i.qty * i.price, 0),
+    tax = groups.reduce((s, g) => s + g.tax, 0);
+  return { subtotal, tax, total: subtotal + tax, groups };
+}
+export const orderTotals = (order: Order) => totals(pricedLines(order));
+export const documentTotal = (d: DocumentData) =>
+  orderTotals(d.order).total +
+  (d.monthly ? d.monthly.previousBalance - d.monthly.payment : 0);
+export function number(row: Row) {
+  const prefix =
+    row.kind === "order"
+      ? "OR"
+      : row.kind === "document"
+        ? {
+            見積書: "QT",
+            納品書: "DL",
+            請求書: "IV",
+            納品請求書: "DI",
+            合計請求書: "MI",
+          }[(row.data as DocumentData).type]
+        : row.kind === "customer"
+          ? "CU"
+          : "PR";
+  return `${prefix}-${String(row.seq).padStart(6, "0")}`;
+}
+export function monthlyDocument(
+  orders: Row<Order>[],
+  customer: Customer,
+  company: Company,
+  month: string,
+  previousBalance = 0,
+  payment = 0,
+): DocumentData {
+  if (!orders.length) throw new Error("対象の伝票がありません");
+  return {
+    type: "合計請求書",
+    date: today(),
+    orderId: "",
+    orderNumber: month,
+    customer,
+    company,
+    monthly: {
+      month,
+      previousBalance,
+      payment,
+      orders: orders.map((r) => ({
+        id: r.id,
+        number: number(r),
+        date: r.data.deliveryDate || r.data.date,
+        title: r.data.title,
+        total: orderTotals(r.data).total,
+      })),
+    },
+    order: {
+      ...orders[0].data,
+      title: `${month.replace("-", "年")}月分 合計請求`,
+      date: today(),
+      deliveryDate: "",
+      dueDate: "",
+      wholesaleRate: 100,
+      businessType: "卸販売",
+      note: "月次の税額は対象伝票の税抜金額を税率ごとに合算して計算しています。",
+      items: orders.flatMap((r) =>
+        pricedLines(r.data).map((i) => ({
+          ...i,
+          name: `${number(r)} / ${i.name}`,
+        })),
+      ),
+    },
+  };
+}
