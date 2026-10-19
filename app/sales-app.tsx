@@ -64,7 +64,6 @@ const nav = [
   { id: "company", label: "自社情報", icon: Settings },
 ] as const;
 const titles = {
-  overview: ["Overview", "今日の仕事を、ここから。"],
   order: ["Orders", "受注管理"],
   customer: ["Customers", "顧客管理"],
   product: ["Products", "商品管理"],
@@ -585,12 +584,17 @@ export default function SalesApp({ userName }: { userName: string }) {
         <div className="content">
           <div className="page-heading">
             <div>
+              {page === "overview" ? (
+                <h1>{new Intl.DateTimeFormat("ja-JP", {
+                  timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric",
+                }).format(new Date())}（{new Intl.DateTimeFormat("ja-JP", {
+                  timeZone: "Asia/Tokyo", weekday: "long",
+                }).format(new Date())}）</h1>
+              ) : <>
               <p className="eyebrow">{titles[page][0]}</p>
               <h1>{titles[page][1]}</h1>
               <p className="subheading">
-                {page === "overview"
-                  ? "受注から帳票まで、日々の流れをシンプルに。"
-                  : page === "order"
+                {page === "order"
                     ? "ご注文の進行状況と明細をまとめて管理。"
                     : page === "customer"
                       ? "取引先の連絡先と請求先情報。"
@@ -600,6 +604,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                           ? "発行時の内容を保存した帳票の一覧。"
                           : "帳票に表示する発行元・振込先を設定。"}
               </p>
+              </>}
             </div>
             {page === "document" && (
               <button
