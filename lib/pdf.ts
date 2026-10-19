@@ -13,6 +13,7 @@ export async function createDocumentPdf(
   row: Row<DocumentData>,
   fontBytes: Uint8Array,
   demo = false,
+  logoBytes?: Uint8Array,
 ) {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
@@ -67,7 +68,14 @@ export async function createDocumentPdf(
     });
     y -= 16;
   }
-  text("MONORAL", 42, 24);
+  if (logoBytes) {
+    const logo = await pdf.embedPng(logoBytes);
+    const width = 220 / 0.9;
+    const height = width * logo.height / logo.width;
+    page.drawImage(logo, { x: 42 - width * 0.051, y: y + 10 - height / 2, width, height });
+  } else {
+    text("MONORAL", 42, 24);
+  }
   text(d.type, 410, 22);
   y -= 35;
   if (demo) {
@@ -230,10 +238,13 @@ export async function downloadDocumentPdf(
 ) {
   const response = await fetch("/fonts/NotoSansJP.otf");
   if (!response.ok) throw new Error("PDF用フォントを読み込めません");
+  const logoResponse = await fetch("/brand/monoral_h6.png");
+  if (!logoResponse.ok) throw new Error("ロゴを読み込めません");
   const bytes = await createDocumentPdf(
     row,
     new Uint8Array(await response.arrayBuffer()),
     demo,
+    new Uint8Array(await logoResponse.arrayBuffer()),
   );
   const buffer = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(buffer).set(bytes);

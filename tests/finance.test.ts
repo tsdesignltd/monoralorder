@@ -5,6 +5,7 @@ import {
   monthlyDocument,
   documentTotal,
   orderSchema,
+  snapshotOrder,
   emptyCompany,
   emptyCustomer,
   type Order,
@@ -42,6 +43,23 @@ const base: Order = {
   ],
 };
 assert.equal(orderTotals(base).total, 72215);
+// Persisted delivery details must survive later catalog and order edits.
+{
+  const catalog = { name: "旧商品名", sku: "OLD", price: 10000, unit: "個", tax: 10 as const };
+  const savedOrder = orderSchema.parse({ ...base, items: [{ ...catalog, productId: "product-1", qty: 2 }] });
+  const delivery = snapshotOrder(savedOrder);
+  const before = JSON.stringify(delivery);
+  const total = orderTotals(delivery).total;
+  Object.assign(catalog, { name: "新商品名", sku: "NEW", price: 20000, unit: "箱", tax: 8 });
+  assert.equal(savedOrder.items[0].name, "旧商品名");
+  assert.equal(savedOrder.items[0].price, 10000);
+  savedOrder.items[0].name = "受注訂正";
+  savedOrder.items[0].qty = 5;
+  savedOrder.items[0].price = 30000;
+  savedOrder.wholesaleRate = 80;
+  assert.equal(JSON.stringify(delivery), before);
+  assert.equal(orderTotals(delivery).total, total);
+}
 assert.equal(orderTotals({ ...base, businessType: "返品処理" }).total, -72215);
 assert.equal(unitPrice(1001, 65), 650);
 assert.equal(unitPrice(12345, 65.25), 8055);

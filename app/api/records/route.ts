@@ -7,6 +7,7 @@ import {
   customerSchema,
   productSchema,
   orderSchema,
+  snapshotOrder,
   number,
   type Row,
   type Order,
@@ -99,7 +100,7 @@ export async function POST(req: Request) {
         orderNumber: number(order),
         customer: customers[0].data,
         company: companies[0].data,
-        order: order.data,
+        order: snapshotOrder(order.data),
       };
       if (input.type.includes("請求")) {
         const result = await database("rpc/monoral_issue_document", {

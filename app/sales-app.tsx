@@ -261,7 +261,7 @@ export default function SalesApp({ userName }: { userName: string }) {
           orderNumber: number(order),
           customer: customers.find((c) => c.id === order.data.customerId)!.data,
           company: company.data,
-          order: order.data,
+          order: structuredClone(order.data),
         };
       }
       const record = await persist("document", data);
@@ -515,11 +515,8 @@ export default function SalesApp({ userName }: { userName: string }) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">
-            M<span>／</span>
-          </div>
           <div>
-            MONORAL<small>ORDER MANAGEMENT</small>
+            <span className="monoral-logo"><img src="/brand/monoral_h6.png" alt="MONORAL" /></span><small>ORDER MANAGEMENT</small>
           </div>
         </div>
         <div className="workspace">
@@ -1785,7 +1782,7 @@ function Document({ row, demo }: { row: Row<DocumentData>; demo: boolean }) {
     <article className="paper">
       {demo && <div className="demo-watermark">SAMPLE — デモ帳票</div>}
       <header className="paper-header">
-        <strong>MONORAL</strong>
+        <span className="monoral-logo"><img src="/brand/monoral_h6.png" alt="MONORAL" /></span>
         <div>
           <h1>{d.type}</h1>
           <p>

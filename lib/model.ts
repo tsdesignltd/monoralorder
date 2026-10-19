@@ -15,7 +15,7 @@ export const categories = [
   "代理店",
   "その他",
 ] as const;
-export const businessTypes = ["卸販売", "サンプル販売", "返品処理"] as const;
+export const businessTypes = ["卸販売", "サンプル販売", "返品処理", "保証交換"] as const;
 export const documentTypes = [
   "見積書",
   "納品書",
@@ -81,6 +81,10 @@ export const companySchema = z.object({
 export type Customer = z.infer<typeof customerSchema>;
 export type Product = z.infer<typeof productSchema>;
 export type Order = z.infer<typeof orderSchema>;
+// Issued documents retain their own values; never resolve old lines from product IDs.
+export function snapshotOrder(order: Order): Order {
+  return structuredClone(order);
+}
 export type Company = z.infer<typeof companySchema>;
 export type Line = z.infer<typeof lineSchema>;
 export type DocumentData = {
