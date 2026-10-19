@@ -50,6 +50,7 @@ import {
   type Line,
   type DocumentData,
 } from "../lib/model";
+import LegacySaleView from "./legacy-sale";
 import CustomerImporter from "./customer-importer";
 import { demoRecords } from "../lib/demo";
 type Page =
@@ -95,6 +96,7 @@ export default function SalesApp({ userName }: { userName: string }) {
     [notice, setNotice] = useState(""),
     [search, setSearch] = useState(""),
     [filter, setFilter] = useState("すべて");
+  const [legacyView,setLegacyView] = useState<Row<Order> | null>(null);
   const [monthly, setMonthly] = useState<{
     customerId: string;
     month: string;
@@ -152,6 +154,7 @@ export default function SalesApp({ userName }: { userName: string }) {
     setFilter("すべて");
   }
   function start(kind: Kind, row?: Row) {
+    if(kind === "order" && (row?.data as Order)?.legacy) {setLegacyView(row as Row<Order>);return;}
     setError("");
     let data: Data = row
       ? structuredClone(row.data)
@@ -367,7 +370,7 @@ export default function SalesApp({ userName }: { userName: string }) {
   const monthlyOrders = monthly
     ? orders.filter(
         (o) =>
-          o.data.customerId === monthly.customerId &&
+          !o.data.legacy && o.data.customerId === monthly.customerId &&
           (o.data.deliveryDate || o.data.date).startsWith(monthly.month) &&
           ["受注確定", "出荷済", "完了"].includes(o.data.status) &&
           !billedIds.has(o.id),
@@ -480,7 +483,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                     ).map((t) => (
                       <button
                         key={t}
-                        disabled={busy}
+                        disabled={busy || !!r.data.legacy}
                         onClick={() => issue(r, t)}
                         title={`${t}を新規発行`}
                       >
@@ -1099,6 +1102,7 @@ export default function SalesApp({ userName }: { userName: string }) {
           {notice}
         </div>
       )}
+      {legacyView && <LegacySaleView row={legacyView} customer={customerName(legacyView.data.customerId)} onClose={()=>setLegacyView(null)}/>}
       {editing && (
         <div className="overlay">
           <div
@@ -1920,4 +1924,5 @@ function Document({ row, demo }: { row: Row<DocumentData>; demo: boolean }) {
     </article>
   );
 }
+
 

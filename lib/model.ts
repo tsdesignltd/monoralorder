@@ -80,7 +80,8 @@ export const companySchema = z.object({
 });
 export type Customer = z.infer<typeof customerSchema>;
 export type Product = z.infer<typeof productSchema>;
-export type Order = z.infer<typeof orderSchema>;
+export type LegacySale = {legacyInvoiceNumber:string; legacyCustomerId:string; invoiceTotal:number; wholesaleSubtotal:number; retailSubtotal:number; tax:number; shipping:number|null; shippingLabel:string; deliveryDate:string; invoiceDate:string|null; estimateDate:string|null; paymentDate:string|null; items:{sku:string;name:string;quantity:number|null;unit:string;unitPrice:number;amount:number;description:string}[]; sourceFields:Record<string,string>};
+export type Order = z.infer<typeof orderSchema> & {legacy?:LegacySale};
 // Issued documents retain their own values; never resolve old lines from product IDs.
 export function snapshotOrder(order: Order): Order {
   return structuredClone(order);
@@ -180,11 +181,12 @@ export function totals(items: Line[]) {
     tax = groups.reduce((s, g) => s + g.tax, 0);
   return { subtotal, tax, total: subtotal + tax, groups };
 }
-export const orderTotals = (order: Order) => totals(pricedLines(order));
+export const orderTotals = (order: Order) => order.legacy ? {subtotal:order.legacy.wholesaleSubtotal,tax:order.legacy.tax,total:order.legacy.invoiceTotal,groups:[]} : totals(pricedLines(order));
 export const documentTotal = (d: DocumentData) =>
   orderTotals(d.order).total +
   (d.monthly ? d.monthly.previousBalance - d.monthly.payment : 0);
 export function number(row: Row) {
+  if(row.kind === 'order' && (row.data as Order).legacy) return `旧伝票-${(row.data as Order).legacy!.legacyInvoiceNumber}`;
   const prefix =
     row.kind === "order"
       ? "OR"
