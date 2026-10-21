@@ -1,7 +1,10 @@
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { configured, database } from "../../../lib/supabase";
 import {
-  monthlyDocument,
+  periodInvoiceDocument,
+  periodDeliveries,
+  periodInvoiceRequest,
+  type DocumentData,
   type Row,
   type Order,
   type Customer,
@@ -21,32 +24,27 @@ export async function POST(req: Request) {
       { status: 503 },
     );
   try {
-    const body = z
-      .object({
-        customerId: z.string().uuid(),
-        month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
-        orderIds: z.array(z.string().uuid()).min(1).max(500),
-        previousBalance: z.number().int().min(-100000000000).max(100000000000),
-        payment: z.number().int().min(0).max(100000000000),
-      })
-      .parse(await req.json());
+    const body = periodInvoiceRequest.parse(await req.json());
     const scope = `owner_id=eq.${encodeURIComponent(user.userId)}`;
-    const orders = await database<Row<Order>>(
-      `monoral_records?${scope}&kind=eq.order&id=in.(${body.orderIds.join(",")})&limit=500`,
-    );
-    if (
-      orders.length !== new Set(body.orderIds).size ||
-      orders.some(
-        (r) =>
-          r.data.customerId !== body.customerId ||
-          !(r.data.deliveryDate || r.data.date).startsWith(body.month) ||
-          r.data.status === "キャンセル",
-      )
-    )
-      return Response.json(
-        { error: "対象伝票が変更されています。再読み込みしてください。" },
-        { status: 409 },
-      );
+    async function allRecords<T>(query: string): Promise<Row<T>[]> {
+      const result: Row<T>[]=[];
+      for (let offset=0; offset<100000; offset+=1000) {
+        const page=await database<Row<T>>(`monoral_records?${scope}&${query}&order=seq.asc&limit=1000&offset=${offset}`);
+        result.push(...page);
+        if (page.length<1000) return result;
+      }
+      throw new Error("対象データが多すぎます。管理者へご連絡ください");
+    }
+    const [candidateOrders,documents]=await Promise.all([
+      allRecords<Order>(`kind=eq.order&data->>customerId=eq.${body.customerId}`),
+      allRecords<DocumentData>("kind=eq.document"),
+    ]);
+    const deliveries=periodDeliveries(candidateOrders,documents,body.customerId,body.startDate,body.endDate);
+    const orders=deliveries.filter(d=>!d.excluded).map(d=>d.order);
+    const submitted=new Set(body.orderIds);
+    if (submitted.size!==body.orderIds.length || orders.length!==submitted.size || orders.some(o=>!submitted.has(o.id))) {
+      return Response.json({error:"期間内の納品または請求状況が変更されています。再読み込みして確認してください。"},{status:409});
+    }
     const customers = await database<Row<Customer>>(
       `monoral_records?${scope}&kind=eq.customer&id=eq.${body.customerId}`,
     );
@@ -55,11 +53,13 @@ export async function POST(req: Request) {
     );
     if (!customers[0] || !companies[0]?.data.address)
       throw new Error("顧客と自社情報（住所を含む）を登録してください");
-    const data = monthlyDocument(
+    const data = periodInvoiceDocument(
       orders,
       customers[0].data,
       companies[0].data,
-      body.month,
+      body.startDate,
+      body.endDate,
+      deliveries,
       body.previousBalance,
       body.payment,
     );

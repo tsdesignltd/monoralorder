@@ -1,9 +1,11 @@
 import fs from "node:fs";
-import { createDocumentPdf } from "../lib/pdf";
+import { createDocumentPdf as renderDocumentPdf } from "../lib/pdf";
 import { demoRecords } from "../lib/demo";
 import {
   singleDocument,
   orderPartySchema,
+  periodInvoiceDocument,
+  periodDeliveries,
   monthlyDocument,
   documentTypes,
   type Row,
@@ -12,6 +14,9 @@ import {
   type Company,
   type DocumentData,
 } from "../lib/model";
+const sealBytes = new Uint8Array(fs.readFileSync("public/brand/outdesign-seal.png"));
+const createDocumentPdf = (row: Row<DocumentData>, font: Uint8Array, demo = false) =>
+  renderDocumentPdf(row, font, demo, sealBytes);
 const rows = demoRecords();
 const order = rows.find((r) => r.kind === "order") as Row<Order>,
   customer = rows.find((r) => r.kind === "customer") as Row<Customer>,
@@ -89,3 +94,19 @@ const entryDoc = singleDocument({ ...order, data: {
 }}, "納品請求書", customer.data, company.data);
 fs.writeFileSync(".sites-runtime/pdf-qa/order-entry.pdf", await createDocumentPdf(
   { ...order, kind: "document", data: entryDoc }, new Uint8Array(fs.readFileSync("public/fonts/NotoSansJP.otf")), true));
+
+const deliveredOrders=[{...order,data:{...order.data,deliveryIssuedDate:"2026-10-01",documentNumber:"DN-101"}},{...order,id:crypto.randomUUID(),seq:100,data:{...order.data,deliveryIssuedDate:"2026-10-31",documentNumber:"DN-102"}}];
+const periodDs=periodDeliveries(deliveredOrders,[],order.data.customerId,"2026-10-01","2026-10-31");
+const periodPdf=periodInvoiceDocument(deliveredOrders,customer.data,company.data,"2026-10-01","2026-10-31",periodDs);
+fs.writeFileSync(".sites-runtime/pdf-qa/period-invoice.pdf",await createDocumentPdf({...order,kind:"document",data:periodPdf},new Uint8Array(fs.readFileSync("public/fonts/NotoSansJP.otf")),true));
+
+const outdesign={...company.data,name:"アウトデザイン株式会社",postal:"194-0032",address:"東京都町田市本町田1833-4",phone:"042-703-4933",fax:"042-633-0363",registration:"T8012301011312",bank:"銀行名：きらぼし銀行　支店名：町田支店\n口座番号：普通口座 1892232\n口座名義：アウトデザイン（カ",note:"振込手数料は貴社でご負担願います。"};
+const refOrder={...order,data:{...order.data,title:"",wholesaleRate:75,shipping:583,deliveryIssuedDate:"2026-10-01",documentNumber:"940",items:[{...order.data.items[0],sku:"MB-0027",name:"TA 2024 Tiフレーム Mサイズ",qty:1,price:260000}]}};
+for(const [key,type] of [["reference-delivery","納品書"],["reference-invoice","請求書"]] as const){
+ const data=singleDocument(refOrder,type,customer.data,outdesign);
+ fs.writeFileSync(`.sites-runtime/pdf-qa/${key}.pdf`,await createDocumentPdf({...order,kind:"document",data},new Uint8Array(fs.readFileSync("public/fonts/NotoSansJP.otf")),true));
+}
+const refOrders=[refOrder,{...order,id:crypto.randomUUID(),seq:200,data:{...refOrder.data,documentNumber:"941",deliveryIssuedDate:"2026-10-17",wholesaleRate:80,shipping:0,items:[{...order.data.items[0],sku:"MB-0030",name:"ARフレームフォークセットM",qty:1,price:360000}]}}];
+const refDs=periodDeliveries(refOrders,[],order.data.customerId,"2026-10-01","2026-10-31");
+const refTotal=periodInvoiceDocument(refOrders,customer.data,outdesign,"2026-10-01","2026-10-31",refDs);
+fs.writeFileSync(".sites-runtime/pdf-qa/reference-total.pdf",await createDocumentPdf({...order,kind:"document",data:refTotal},new Uint8Array(fs.readFileSync("public/fonts/NotoSansJP.otf")),true));

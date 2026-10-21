@@ -1,4 +1,5 @@
 "use client";
+import { documentGreeting } from "../lib/document-text";
 import { apiFetch } from "../lib/client-api";
 import { useState, useEffect, type FormEvent } from "react";
 import {
@@ -35,7 +36,12 @@ import {
   orderTotals,
   pricedLines,
   documentTotal,
-  monthlyDocument,
+  documentTotals,
+  retailLines,
+  retailSubtotal,
+  periodDeliveries,
+  periodInvoiceDocument,
+  invoicePeriodLabel,
   customerSchema,
   productSchema,
   orderSchema,
@@ -100,7 +106,8 @@ export default function SalesApp({ userName }: { userName: string }) {
   const [legacyView,setLegacyView] = useState<Row<Order> | null>(null);
   const [monthly, setMonthly] = useState<{
     customerId: string;
-    month: string;
+    startDate: string;
+    endDate: string;
     previousBalance: number;
     payment: number;
   } | null>(null);
@@ -386,17 +393,17 @@ export default function SalesApp({ userName }: { userName: string }) {
           : [d.data.orderId],
       ),
   );
-  const monthlyOrders = monthly
-    ? orders.filter(
-        (o) =>
-          !o.data.legacy && o.data.customerId === monthly.customerId &&
-          (o.data.deliveryDate || o.data.date).startsWith(monthly.month) &&
-          o.data.status !== "キャンセル" &&
-          !billedIds.has(o.id),
-      )
-    : [];
+  function openTotalInvoice() {
+    setError("");
+    setMonthly({customerId: customers[0]?.id || "", startDate: today().slice(0,7)+"-01", endDate: today(), previousBalance:0, payment:0});
+  }
+  const periodValid = !!monthly?.startDate && !!monthly.endDate && monthly.startDate <= monthly.endDate;
+  const listedDeliveries = monthly && periodValid ? periodDeliveries(orders,docs,monthly.customerId,monthly.startDate,monthly.endDate) : [];
+  const monthlyOrders = listedDeliveries.filter((d)=>!d.excluded).map((d)=>d.order);
+  const totalInvoiceDraft = monthly && monthlyOrders.length && monthlyOrders.length<=500 && Number.isInteger(monthly.previousBalance) && Number.isInteger(monthly.payment) && monthly.payment>=0
+    ? periodInvoiceDocument(monthlyOrders, customers.find((c)=>c.id===monthly.customerId)!.data,company?.data || emptyCompany,monthly.startDate,monthly.endDate,listedDeliveries,monthly.previousBalance,monthly.payment) : null;
   async function issueMonthly() {
-    if (!monthly || busy) return;
+    if (!monthly || busy || !totalInvoiceDraft) return;
     setBusy(true);
     setError("");
     try {
@@ -406,14 +413,8 @@ export default function SalesApp({ userName }: { userName: string }) {
           throw new Error("自社情報を登録してください");
         record = await persist(
           "document",
-          monthlyDocument(
-            monthlyOrders,
-            customers.find((c) => c.id === monthly.customerId)!.data,
-            company.data,
-            monthly.month,
-            monthly.previousBalance,
-            monthly.payment,
-          ),
+          periodInvoiceDocument(monthlyOrders, customers.find((c)=>c.id===monthly.customerId)!.data,
+            company.data,monthly.startDate,monthly.endDate,listedDeliveries,monthly.previousBalance,monthly.payment),
         );
       } else {
         const res = await apiFetch("/api/monthly", {
@@ -431,6 +432,12 @@ export default function SalesApp({ userName }: { userName: string }) {
       }
       setPreview(record as Row<DocumentData>);
       setMonthly(null);
+      try {
+        const { downloadDocumentPdf } = await import("../lib/pdf");
+        await downloadDocumentPdf(record as Row<DocumentData>, demo);
+      } catch {
+        setNotice("合計請求書は保存済みです。表示中の帳票からPDFを再ダウンロードしてください。");
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -624,17 +631,10 @@ export default function SalesApp({ userName }: { userName: string }) {
               <button
                 className="primary"
                 disabled={!canEdit || !customers.length}
-                onClick={() =>
-                  setMonthly({
-                    customerId: customers[0]?.id || "",
-                    month: today().slice(0, 7),
-                    previousBalance: 0,
-                    payment: 0,
-                  })
-                }
+                onClick={openTotalInvoice}
               >
                 <Plus size={18} />
-                月締め合計請求書
+                合計請求書
               </button>
             )}
             {page !== "company" && page !== "document" && (
@@ -740,12 +740,13 @@ export default function SalesApp({ userName }: { userName: string }) {
                     </button>
                     <button
                       className="quick-card"
-                      onClick={() => go("document")}
+                      disabled={!canEdit || !customers.length}
+                      onClick={openTotalInvoice}
                     >
                       <FileText />
                       <div>
-                        <strong>必要な帳票を、すぐに</strong>
-                        <p>見積書・納品書・請求書。</p>
+                        <strong>合計請求書</strong>
+                        <p>顧客と期間を選んでPDFを生成。</p>
                       </div>
                       <ArrowUpRight />
                     </button>
@@ -1295,6 +1296,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                       ["postal", "郵便番号"],
                       ["address", "住所"],
                       ["phone", "電話番号"],
+                      ["fax", "FAX"],
                       ["email", "メールアドレス"],
                       ["registration", "適格請求書発行事業者の登録番号"],
                       ["bank", "振込先"],
@@ -1306,7 +1308,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                         required={key === "name" || key === "address"}
                         area={key === "bank" || key === "note"}
                         type={key === "email" ? "email" : "text"}
-                        value={(editing.data as Company)[key as keyof Company]}
+                        value={(editing.data as Company)[key as keyof Company] || ""}
                         set={(v) => update(key, v)}
                       />
                     ))}
@@ -1533,6 +1535,13 @@ export default function SalesApp({ userName }: { userName: string }) {
                         </p>
                       )}
                     </div>
+                    <div className="form-grid" style={{marginTop:20}}>
+                      <Field label="送料（税込・円）" type="text" value={(editing.data as Order).shipping || 0}
+                        set={(v)=>update("shipping",Number(v))} />
+                      <Field label="発送日" type="date" value={(editing.data as Order).dispatchDate || ""}
+                        set={(v)=>update("dispatchDate",v)} />
+                      <Field label="運送業者" value={(editing.data as Order).carrier || ""} set={(v)=>update("carrier",v)} />
+                    </div>
                     <div className="order-totals">
                       <div>
                         税抜小計
@@ -1546,6 +1555,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                           {money(orderTotals(editing.data as Order).tax)}
                         </strong>
                       </div>
+                      <div>送料<strong>{money((editing.data as Order).shipping || 0)}</strong></div>
                       <div className="grand-total">
                         税込合計
                         <strong>
@@ -1596,10 +1606,10 @@ export default function SalesApp({ userName }: { userName: string }) {
             className="modal wide"
             role="dialog"
             aria-modal="true"
-            aria-label="月締め合計請求書"
+            aria-label="合計請求書"
           >
             <div className="modal-header">
-              <h2>月締め合計請求書</h2>
+              <h2>合計請求書</h2>
               <button
                 className="icon-button"
                 disabled={busy}
@@ -1612,7 +1622,7 @@ export default function SalesApp({ userName }: { userName: string }) {
             <div className="modal-body">
               {error && <div className="error">{error}</div>}
               <div className="form-grid">
-                <label>
+                <label className="full-width">
                   顧客
                   <select
                     value={monthly.customerId}
@@ -1627,17 +1637,13 @@ export default function SalesApp({ userName }: { userName: string }) {
                     ))}
                   </select>
                 </label>
-                <label>
-                  対象月（末日締め）
-                  <input
-                    type="month"
-                    required
-                    value={monthly.month}
-                    onChange={(e) =>
-                      setMonthly({ ...monthly, month: e.target.value })
-                    }
-                  />
-                </label>
+                <Field label="開始日" type="date" value={monthly.startDate}
+                  set={(v)=>setMonthly({...monthly,startDate:v})} />
+                <Field label="終了日" type="date" value={monthly.endDate}
+                  set={(v)=>setMonthly({...monthly,endDate:v})} />
+                <details className="full-width invoice-adjustments">
+                  <summary>繰越・入金額を調整</summary>
+                  <div className="form-grid">
                 <Field
                   label="前回繰越額（円）"
                   type="text"
@@ -1652,36 +1658,44 @@ export default function SalesApp({ userName }: { userName: string }) {
                   value={monthly.payment}
                   set={(v) => setMonthly({ ...monthly, payment: Number(v) })}
                 />
+                  </div>
+                </details>
               </div>
               <p className="muted" style={{ margin: "20px 0" }}>
-                納品予定日（未指定の場合は受注日）が対象月の伝票を集計します。単体請求・納品請求・合計請求で請求済みの伝票は除外します。
+                開始日・終了日を含む納品書発行日で集計します。請求済み・移行済みの伝票は一覧に表示し、今回の請求金額からは除外します。
               </p>
               <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
+                      <th>納品日</th>
                       <th>対象伝票</th>
                       <th>業務</th>
                       <th>税込金額</th>
+                      <th>今回の請求</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {monthlyOrders.map((o) => (
+                    {listedDeliveries.map(({order:o,date,excluded}) => (
                       <tr key={o.id}>
-                        <td>
-                          {number(o)} / {o.data.title}
-                        </td>
+                        <td>{date}</td>
+                        <td>{o.data.documentNumber || number(o)}</td>
                         <td>{o.data.businessType}</td>
                         <td>{money(orderTotals(o.data).total)}</td>
+                        <td>{excluded || "対象"}</td>
                       </tr>
                     ))}
+                    {!listedDeliveries.length && <tr><td colSpan={5}>期間内の納品はありません。</td></tr>}
                   </tbody>
                 </table>
               </div>
               <p className="muted">
                 {monthlyOrders.length}{" "}
-                件。月次の税額は税率別の税抜合計から再計算します。
+                件が今回の請求対象です。各納品の仕切後金額・消費税・送料を合算します。
               </p>
+              {!periodValid && <p role="alert" className="error">開始日と終了日を確認してください。</p>}
+              {monthlyOrders.length>500 && <p role="alert" className="error">対象伝票が500件を超えています。期間を分けてください。</p>}
+              {totalInvoiceDraft && <div className="order-totals"><div className="grand-total">今回のご請求額<strong>{money(documentTotal(totalInvoiceDraft))}</strong></div></div>}
             </div>
             <div className="modal-footer">
               <button
@@ -1695,14 +1709,15 @@ export default function SalesApp({ userName }: { userName: string }) {
                 className="primary"
                 disabled={
                   busy ||
-                  !monthlyOrders.length ||
+                  !totalInvoiceDraft ||
+                  !periodValid ||
                   !Number.isInteger(monthly.previousBalance) ||
                   !Number.isInteger(monthly.payment) ||
                   monthly.payment < 0
                 }
                 onClick={() => void issueMonthly()}
               >
-                {busy ? "発行中…" : "合計請求書を発行"}
+                {busy ? "発行中…" : "合計請求書PDFを生成"}
               </button>
             </div>
           </div>
@@ -1862,9 +1877,23 @@ function Field({
     </label>
   );
 }
+function PeriodInvoiceRows({delivery:o}:{delivery: NonNullable<DocumentData["monthly"]>["orders"][number]}) {
+  const t=o.order ? orderTotals(o.order) : null;
+  const items=o.order ? retailLines(o.order) : [];
+  return <>
+    {items.map((i,n)=><tr key={n}><td>{n===0?o.date:""}</td><td>{n===0?o.number:""}</td><td>{i.sku}</td><td>{i.name}</td><td>{i.qty}</td><td>{money(i.price)}</td><td>{money(i.qty*i.price)}</td></tr>)}
+    {!items.length && <tr><td>{o.date}</td><td>{o.number}</td><td></td><td></td><td></td><td></td><td></td></tr>}
+    {o.order && <>
+      <tr><td></td><td></td><td></td><td>仕切率（{o.order.wholesaleRate}%）</td><td></td><td></td><td>{money(t!.subtotal)}</td></tr>
+      {t!.groups.map(g=><tr key={g.rate}><td></td><td></td><td></td><td>消費税（{g.rate}%）</td><td></td><td></td><td>{money(g.tax)}</td></tr>)}
+      <tr><td></td><td></td><td></td><td>送料（税込）</td><td></td><td></td><td>{money(t!.shipping)}</td></tr>
+    </>}
+    <tr className="invoice-delivery-total"><td></td><td></td><td></td><td></td><td></td><td>合計</td><td>{money(o.total)}</td></tr>
+  </>;
+}
 function Document({ row, demo }: { row: Row<DocumentData>; demo: boolean }) {
   const d = row.data,
-    t = orderTotals(d.order);
+    t = documentTotals(d);
   return (
     <article className="paper">
       {demo && <div className="demo-watermark">サンプル — デモ帳票</div>}
@@ -1881,32 +1910,32 @@ function Document({ row, demo }: { row: Row<DocumentData>; demo: boolean }) {
       </header>
       <div className="paper-parties">
         <div>
-          <h2>{d.customer.name} 御中</h2>
+          <h2>{d.customer.name}{!d.customer.contact && " 御中"}</h2>
           <p>
             〒 {d.customer.postal}
             <br />
             {d.customer.address}
             <br />
-            {d.customer.contact && `${d.customer.contact} 様`}
+            {d.customer.contact && (/様$|御中$/.test(d.customer.contact) ? d.customer.contact : `${d.customer.contact} 様`)}
           </p>
+          {documentGreeting(d.type) && <p className="paper-greeting">{documentGreeting(d.type)}</p>}
         </div>
-        <div>
+        <div className="paper-issuer">
+          <div>
           <strong>{d.company.name}</strong>
           <p>
+            {d.company.registration && <>{`登録番号 ${d.company.registration}`}<br /></>}
             〒 {d.company.postal}
             <br />
             {d.company.address}
             <br />
             {d.company.phone}
+            {d.company.fax && <><br />FAX：{d.company.fax}</>}
             <br />
             {d.company.email}
-            {d.company.registration && (
-              <>
-                <br />
-                登録番号 {d.company.registration}
-              </>
-            )}
           </p>
+          </div>
+          {d.company.name === "アウトデザイン株式会社" && <img className="paper-seal" src="./brand/outdesign-seal.png" alt="アウトデザイン株式会社 社印" />}
         </div>
       </div>
       {d.order.title && <p className="paper-subject">件名：{d.order.title}</p>}
@@ -1922,7 +1951,7 @@ function Document({ row, demo }: { row: Row<DocumentData>; demo: boolean }) {
         <small>（税込）</small>
       </div>
       <div className="paper-dates">
-        <span>受注番号：{d.orderNumber}</span>
+        <span>{d.monthly ? "対象期間" : "受注番号"}：{d.orderNumber}</span>
         <span>
           {d.monthly
             ? "各伝票の仕切り率を適用"
@@ -1933,38 +1962,18 @@ function Document({ row, demo }: { row: Row<DocumentData>; demo: boolean }) {
         )}
         {d.order.dueDate && <span>支払期日：{d.order.dueDate}</span>}
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>品名</th>
-            <th>数量</th>
-            <th>単価（税抜）</th>
-            <th>税率</th>
-            <th>金額（税抜）</th>
-          </tr>
-        </thead>
-        <tbody>
-          {pricedLines(d.order).map((i, n) => (
-            <tr key={n}>
-              <td>
-                {i.name}
-                {i.sku && <small>{i.sku}</small>}
-              </td>
-              <td>
-                {i.qty} {i.unit}
-              </td>
-              <td>{money(i.price)}</td>
-              <td>{i.tax}%</td>
-              <td>{money(i.qty * i.price)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {d.monthly?.startDate ? (
+        <table className="reference-detail-table"><thead><tr><th>納品書発行日</th><th>No.</th><th>商品番号</th><th>商品名</th><th>数量</th><th>単価</th><th>小計</th></tr></thead>
+          <tbody>{d.monthly.orders.map((o)=><PeriodInvoiceRows key={o.id} delivery={o} />)}</tbody>
+        </table>
+      ) : (
+        <table><thead><tr><th>商品番号</th><th>商品名</th><th>数量</th><th>単位</th><th>単価（税抜）</th><th>小計</th></tr></thead>
+          <tbody>{retailLines(d.order).map((i,n)=><tr key={n}><td>{i.sku}</td><td>{i.name}</td><td>{i.qty}</td><td>{i.unit}</td><td>{money(i.price)}</td><td>{money(i.qty*i.price)}</td></tr>)}</tbody>
+        </table>
+      )}
       <div className="paper-summary">
-        <div>
-          <span>税抜小計</span>
-          <strong>{money(t.subtotal)}</strong>
-        </div>
+        {!d.monthly && <div><span>小計（定価）</span><strong>{money(retailSubtotal(d.order))}</strong></div>}
+        <div><span>{d.monthly ? "仕切後小計" : `仕切率 ${d.order.wholesaleRate}%`}</span><strong>{money(t.subtotal)}</strong></div>
         {t.groups.map((g) => (
           <div key={g.rate}>
             <span>
@@ -1973,6 +1982,7 @@ function Document({ row, demo }: { row: Row<DocumentData>; demo: boolean }) {
             <strong>{money(g.tax)}</strong>
           </div>
         ))}
+        <div><span>送料（税込）</span><strong>{money(t.shipping)}</strong></div>
         {d.monthly && (
           <>
             <div>
@@ -1990,6 +2000,18 @@ function Document({ row, demo }: { row: Row<DocumentData>; demo: boolean }) {
           <strong>{money(documentTotal(d))}</strong>
         </div>
       </div>
+      {d.monthly && !d.monthly.startDate && (
+        <section className="paper-note">
+          <h3>対象納品一覧（{invoicePeriodLabel(d)}）</h3>
+          <table><thead><tr><th>納品日</th><th>伝票番号</th><th>業務名称</th><th>税込金額</th></tr></thead>
+            <tbody>{d.monthly.orders.map((o)=><tr key={o.id}><td>{o.date}</td><td>{o.number}</td><td>{o.title}</td><td>{money(o.total)}</td></tr>)}</tbody>
+          </table>
+        </section>
+      )}
+      <section className="paper-note paper-issue-info">
+        <p>{d.type}発行日：{d.date}　{d.type.includes("納品") ? "納品No." : "請求書No."}：{d.order.documentNumber || number(row)}</p>
+        {d.type.includes("納品") && <p>{[d.order.dueDate && `入金予定日：${d.order.dueDate}`,d.order.dispatchDate && `発送日：${d.order.dispatchDate}`,d.order.carrier && `運送業者：${d.order.carrier}`].filter(Boolean).join("　")}</p>}
+      </section>
       {documentDeliveryRecipient(d) && (
         <section className="paper-note">
           <h3>納品先</h3>
@@ -2003,10 +2025,10 @@ function Document({ row, demo }: { row: Row<DocumentData>; demo: boolean }) {
           <p>{d.company.bank}</p>
         </section>
       )}
-      {(d.order.note || d.company.note) && (
+      {(d.order.note || (d.type.includes("請求") && d.company.note)) && (
         <section className="paper-note">
           <h3>備考</h3>
-          <p>{[d.order.note, d.company.note].filter(Boolean).join("\n")}</p>
+          <p>{[d.order.note, d.type.includes("請求") && d.company.note].filter(Boolean).join("\n")}</p>
         </section>
       )}
       <footer>MONORAL / {number(row)}</footer>

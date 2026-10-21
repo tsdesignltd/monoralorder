@@ -89,6 +89,9 @@ export const orderSchema = z.object({
   customerDetails: orderPartySchema.optional(),
   billingDetails: orderPartySchema.optional(),
   bankAccount: text.optional(),
+  shipping: z.number().int().min(-100000000).max(100000000).optional(),
+  dispatchDate: optionalDate.optional(),
+  carrier: text.optional(),
   title: z.string().trim().max(200).default(""),
   date,
   deliveryDate: optionalDate,
@@ -107,6 +110,7 @@ export const orderSchema = z.object({
 });
 export const companySchema = z.object({
   name: required,
+  fax: text.optional(),
   address: text,
   postal: text,
   phone: text,
@@ -125,6 +129,7 @@ export function snapshotOrder(order: Order): Order {
 }
 export type Company = z.infer<typeof companySchema>;
 export type Line = z.infer<typeof lineSchema>;
+export type AccountingTotals = { subtotal: number; tax: number; shipping: number; total: number; groups: {rate:number;subtotal:number;tax:number}[] };
 export type DocumentData = {
   type: (typeof documentTypes)[number];
   date: string;
@@ -135,14 +140,18 @@ export type DocumentData = {
   order: Order;
   monthly?: {
     month: string;
+    startDate?: string;
+    endDate?: string;
     previousBalance: number;
     payment: number;
+    accounting?: AccountingTotals;
     orders: {
       id: string;
       number: string;
       date: string;
       title: string;
       total: number;
+      order?: Order;
     }[];
   };
 };
@@ -241,10 +250,28 @@ export function totals(items: Line[]) {
     tax = groups.reduce((s, g) => s + g.tax, 0);
   return { subtotal, tax, total: subtotal + tax, groups };
 }
-export const orderTotals = (order: Order) => order.legacy ? {subtotal:order.legacy.wholesaleSubtotal,tax:order.legacy.tax,total:order.legacy.invoiceTotal,groups:[]} : totals(pricedLines(order));
-export const documentTotal = (d: DocumentData) =>
-  orderTotals(d.order).total +
+export const orderTotals = (order: Order): AccountingTotals => {
+  if (order.legacy) return {subtotal:order.legacy.wholesaleSubtotal,tax:order.legacy.tax,shipping:order.legacy.shipping || 0,total:order.legacy.invoiceTotal,groups:[]};
+  const result=totals(pricedLines(order));
+  const shipping=order.shipping || 0;
+  return {...result,shipping,total:result.total+shipping};
+};
+export function retailLines(order: Order): Line[] {
+  return order.items.map(i=>({...i,qty:i.qty*(order.businessType==="返品処理" ? -1 : 1)}));
+}
+export const retailSubtotal = (order: Order) => retailLines(order).reduce((sum,i)=>sum+i.qty*i.price,0);
+export const documentTotals = (d:DocumentData): AccountingTotals => d.monthly?.accounting || orderTotals(d.order);
+export const documentTotal = (d: DocumentData) => documentTotals(d).total +
   (d.monthly ? d.monthly.previousBalance - d.monthly.payment : 0);
+export function combinedOrderTotals(orders: Row<Order>[]): AccountingTotals {
+  const all=orders.map(r=>orderTotals(r.data));
+  const sum=(key:"subtotal"|"tax"|"shipping"|"total")=>all.reduce((v,t)=>v+t[key],0);
+  const groups=[0,8,10].map(rate=>({rate,
+    subtotal:all.flatMap(t=>t.groups).filter(g=>g.rate===rate).reduce((v,g)=>v+g.subtotal,0),
+    tax:all.flatMap(t=>t.groups).filter(g=>g.rate===rate).reduce((v,g)=>v+g.tax,0),
+  })).filter(g=>g.subtotal!==0 || g.tax!==0);
+  return {subtotal:sum("subtotal"),tax:sum("tax"),shipping:sum("shipping"),total:sum("total"),groups};
+}
 export function number(row: Row) {
   if(row.kind === 'order' && (row.data as Order).legacy) return `旧伝票-${(row.data as Order).legacy!.legacyInvoiceNumber}`;
   const prefix =
@@ -299,6 +326,7 @@ export function monthlyDocument(
       dueDate: "",
       wholesaleRate: 100,
       businessType: "卸販売",
+      shipping: orders.reduce((v,r)=>v+(r.data.shipping || 0),0),
       note: "月次の税額は対象伝票の税抜金額を税率ごとに合算して計算しています。",
       items: orders.flatMap((r) =>
         pricedLines(r.data).map((i) => ({
@@ -309,3 +337,51 @@ export function monthlyDocument(
     },
   };
 }
+
+export function invoicePeriodLabel(d: DocumentData): string {
+  return d.monthly?.startDate && d.monthly.endDate
+    ? `${d.monthly.startDate} ～ ${d.monthly.endDate}` : d.monthly?.month || "";
+}
+export function periodDeliveries(orders: Row<Order>[], documents: Row<DocumentData>[], customerId: string, startDate: string, endDate: string) {
+  const billed = new Set(documents.filter((d) => d.data.type.includes("請求")).flatMap((d) =>
+    d.data.monthly ? d.data.monthly.orders.map((o) => o.id) : [d.data.orderId]));
+  return orders.filter((o) => o.data.customerId === customerId && o.data.status !== "キャンセル").flatMap((order) => {
+    const issued = documents.filter((d) => ["納品書", "納品請求書"].includes(d.data.type) && d.data.orderId === order.id)
+      .map((d) => d.data.date).sort()[0];
+    const deliveryDate = order.data.deliveryIssuedDate || issued || (order.data.legacy ? order.data.deliveryDate : "");
+    if (!deliveryDate || !date.safeParse(deliveryDate).success || deliveryDate < startDate || deliveryDate > endDate) return [];
+    return [{ order, date: deliveryDate, excluded: order.data.legacy ? "移行済（再請求対象外）" : billed.has(order.id) ? "請求済み" : "" }];
+  }).sort((a,b) => a.date.localeCompare(b.date) || a.order.seq-b.order.seq);
+}
+export function periodInvoiceDocument(orders: Row<Order>[], customer: Customer, company: Company, startDate: string, endDate: string, deliveries: { order: Row<Order>; date: string }[], previousBalance=0, payment=0): DocumentData {
+  if (!date.safeParse(startDate).success || !date.safeParse(endDate).success || startDate > endDate) throw new Error("対象期間を確認してください");
+  if (orders.length > 500) throw new Error("対象伝票が500件を超えています。期間を分けてください");
+  const result=monthlyDocument(orders,structuredClone(customer),structuredClone(company),startDate.slice(0,7),previousBalance,payment);
+  result.monthly!.startDate=startDate;
+  result.monthly!.endDate=endDate;
+  result.orderNumber=`${startDate} ～ ${endDate}`;
+  result.order.title="";
+  result.order.documentNumber=undefined;
+  result.order.customerDetails=undefined;
+  result.order.billingDetails=undefined;
+  result.order.bankAccount=undefined;
+  result.order.shipping=0;
+  result.monthly!.accounting=combinedOrderTotals(orders);
+  result.order.note="各納品の仕切後金額・消費税・送料を合算しています。";
+  result.monthly!.orders=orders.map((o)=>({id:o.id,number:o.data.documentNumber || number(o),date:deliveries.find(d=>d.order.id===o.id)!.date,title:o.data.businessType,total:orderTotals(o.data).total,order:snapshotOrder(o.data)}));
+  return result;
+}
+export const periodInvoiceRequest = z.object({
+  customerId: z.string().uuid(), startDate: date.optional(), endDate: date.optional(),
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
+  orderIds: z.array(z.string().uuid()).min(1).max(500),
+  previousBalance: z.number().int().min(-100000000000).max(100000000000).default(0),
+  payment: z.number().int().min(0).max(100000000000).default(0),
+}).superRefine((v,ctx)=>{
+  if (!(v.startDate && v.endDate) && !v.month) ctx.addIssue({code:z.ZodIssueCode.custom,message:"開始日と終了日を指定してください"});
+  if (v.startDate && v.endDate && v.startDate > v.endDate) ctx.addIssue({code:z.ZodIssueCode.custom,message:"開始日は終了日以前にしてください"});
+}).transform(v=>{
+  const startDate=v.startDate || v.month+"-01";
+  const endDate=v.endDate || new Date(Date.UTC(Number(v.month!.slice(0,4)),Number(v.month!.slice(5,7)),0)).toISOString().slice(0,10);
+  return {...v,startDate,endDate};
+});

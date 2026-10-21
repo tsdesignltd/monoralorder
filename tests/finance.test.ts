@@ -7,12 +7,16 @@ import {
   singleDocument,
   documentDeliveryRecipient,
   orderPartySchema,
+  periodDeliveries,
+  periodInvoiceDocument,
+  periodInvoiceRequest,
   orderTotals,
   customerCategory,
   customerSchema,
   unitPrice,
   monthlyDocument,
   documentTotal,
+  documentTotals,
   orderSchema,
   snapshotOrder,
   emptyCompany,
@@ -191,3 +195,42 @@ const { title: previousTitle, ...withoutTitle } = withoutStatus;
 assert.equal(orderSchema.parse(withoutTitle).title, "");
 assert.equal(orderSchema.parse({ ...withoutStatus, title: "" }).title, "");
 assert.equal(singleDocument(row(orderSchema.parse(withoutTitle), 2), "納品書", emptyCustomer, emptyCompany).order.title, "");
+
+const firstDelivery = row({ ...base, date: "2026-09-01", deliveryIssuedDate: "2026-10-01", documentNumber: "DN-1" }, 101);
+const lastDelivery = row({ ...base, date: "2026-09-02", deliveryIssuedDate: "2026-10-31" }, 102);
+const plannedOnly = row({ ...base, deliveryDate: "2026-10-15" }, 103);
+const outside = row({ ...base, deliveryIssuedDate: "2026-11-01" }, 104);
+const cancelled = row({ ...base, deliveryIssuedDate: "2026-10-02", status: "キャンセル" }, 105);
+const otherCustomer = row({ ...base, customerId: crypto.randomUUID(), deliveryIssuedDate: "2026-10-02" },106);
+const recordedDelivery=row({...base,deliveryIssuedDate:""},107);
+const deliveredDoc: Row<import("../lib/model").DocumentData>={...recordedDelivery,kind:"document",id:crypto.randomUUID(),data:singleDocument(recordedDelivery,"納品書",{...emptyCustomer,name:"期間集計テスト"},emptyCompany)};
+deliveredDoc.data.date="2026-10-10";
+const ds=periodDeliveries([firstDelivery,lastDelivery,plannedOnly,outside,cancelled,otherCustomer,recordedDelivery],[deliveredDoc],base.customerId,"2026-10-01","2026-10-31");
+assert.deepEqual(ds.map(d=>d.order.id),[firstDelivery.id,recordedDelivery.id,lastDelivery.id]);
+const periodBill=periodInvoiceDocument(ds.map(d=>d.order),{...emptyCustomer,name:"期間集計テスト"},emptyCompany,"2026-10-01","2026-10-31",ds);
+assert.equal(periodBill.monthly!.startDate,"2026-10-01");
+assert.equal(periodBill.monthly!.endDate,"2026-10-31");
+assert.equal(periodBill.monthly!.orders[0].number,"DN-1");
+assert.equal(documentTotal(periodBill),documentTotal(monthlyDocument(ds.map(d=>d.order),{...emptyCustomer,name:"期間集計テスト"},emptyCompany,"2026-10")));
+const billedDoc={...deliveredDoc,id:crypto.randomUUID(),data:{...deliveredDoc.data,type:"請求書" as const,orderId:firstDelivery.id}};
+assert.equal(periodDeliveries([firstDelivery],[billedDoc],base.customerId,"2026-10-01","2026-10-31")[0].excluded,"請求済み");
+assert.equal(periodInvoiceRequest.safeParse({customerId:base.customerId,startDate:"2026-11-01",endDate:"2026-10-01",orderIds:[firstDelivery.id]}).success,false);
+assert.equal(periodInvoiceRequest.safeParse({customerId:base.customerId,startDate:"2026-02-30",endDate:"2026-10-01",orderIds:[firstDelivery.id]}).success,false);
+assert.equal(periodInvoiceRequest.parse({customerId:base.customerId,month:"2028-02",orderIds:[firstDelivery.id]}).endDate,"2028-02-29");
+console.log("PASS: delivery periods include boundary dates, omit planned/cancelled/other customers and preserve billed exclusions");
+
+const frameOrder={...base,wholesaleRate:75,items:[{...base.items[0],qty:1,price:260000}],shipping:0};
+assert.equal(orderTotals(frameOrder).total,214500);
+assert.equal(orderTotals({...frameOrder,wholesaleRate:80,items:[{...base.items[0],qty:1,price:360000}]}).total,316800);
+assert.equal(orderTotals({...frameOrder,shipping:583}).total,215083);
+assert.equal(orderTotals({...frameOrder,shipping:583}).tax,19500);
+const pennyOrders=[1,2].map(n=>row({...base,wholesaleRate:100,shipping:0,deliveryIssuedDate:"2026-10-01",items:[{...base.items[0],qty:1,price:19}]},200+n));
+const pennyDeliveries=periodDeliveries(pennyOrders,[],base.customerId,"2026-10-01","2026-10-31");
+const pennyBill=periodInvoiceDocument(pennyOrders,emptyCustomer,emptyCompany,"2026-10-01","2026-10-31",pennyDeliveries);
+assert.equal(documentTotals(pennyBill).tax,2);
+assert.equal(documentTotal(pennyBill),40);
+assert.equal(pennyBill.monthly!.orders.length,2);
+assert.equal(pennyBill.monthly!.orders[0].order!.items[0].price,19);
+pennyOrders[0].data.items[0].price=99;
+assert.equal(pennyBill.monthly!.orders[0].order!.items[0].price,19);
+console.log("PASS: reference document amounts, shipping as tax-inclusive charge, and sums of per-delivery rounded taxes");

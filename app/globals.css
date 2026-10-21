@@ -1412,3 +1412,26 @@ code {
 
 .brand-home { display: block; padding: 0; border: 0; background: transparent; cursor: pointer; }
 .brand-home:focus-visible { outline: 2px solid #294f40; outline-offset: 5px; border-radius: 2px; }
+
+.invoice-adjustments summary { cursor: pointer; color: #52624f; font-size: 12px; }
+.invoice-adjustments[open] summary { margin-bottom: 16px; }
+
+.paper .reference-detail-table { font-size: 9px; }
+.paper .reference-detail-table th, .paper .reference-detail-table td { padding: 8px 4px; }
+.paper .reference-detail-table td:first-child { background: white; }
+.paper .reference-detail-table th { background: #efefef; border-bottom: 2px solid #111; }
+.paper .reference-detail-table td:last-child { background: white; }
+.paper .reference-detail-table .invoice-delivery-total td { border-bottom: 2px solid #111; }
+.paper .reference-detail-table .invoice-delivery-total td:nth-last-child(-n+2) { background: #efefef; }
+.paper .reference-detail-table .invoice-delivery-total td:nth-last-child(2) { text-align: right; padding-right: 8px; }
+
+.paper-issuer { display: flex; align-items: flex-start; gap: 12px; }
+.paper-issuer > div { min-width: 0; }
+.paper-seal { width: 64px; height: auto; flex: 0 0 64px; }
+
+.paper-summary > div { background: white; }
+.paper-summary > .paper-grand { background: #efefef; }
+
+.paper-summary > div { display: grid; grid-template-columns: minmax(0, 1fr) 110px; padding: 0; }
+.paper-summary > div > span, .paper-summary > div > strong { padding: 9px 8px; text-align: right; }
+.paper-summary > div > strong { border-left: 1px solid #999; }
