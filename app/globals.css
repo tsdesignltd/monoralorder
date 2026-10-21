@@ -1394,3 +1394,7 @@ code {
 .customer-tabs button[aria-pressed="true"] { background: #294f40; border-color: #294f40; color: white; }
 .customer-tabs button span { font-size: 12px; opacity: .8; }
 .customer-tabs button:focus-visible { outline: 2px solid #294f40; outline-offset: 3px; }
+
+.customer-sheet-links { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+.customer-sheet-links a { text-decoration: none; }
+.customer-sheet-links a:focus-visible { outline: 2px solid #294f40; outline-offset: 3px; }

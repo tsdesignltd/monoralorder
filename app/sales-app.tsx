@@ -52,7 +52,6 @@ import {
   type DocumentData,
 } from "../lib/model";
 import LegacySaleView from "./legacy-sale";
-import CustomerImporter from "./customer-importer";
 import { demoRecords } from "../lib/demo";
 type Page =
   "overview" | "order" | "customer" | "product" | "document" | "company";
@@ -775,12 +774,24 @@ export default function SalesApp({ userName }: { userName: string }) {
               )}
               {page === "customer" && (
                 <>
-                  <CustomerImporter
-                    enabled={connected && !demo}
-                    onImported={(incoming) =>
-                      setRows((old) => [...incoming, ...old])
-                    }
-                  />
+                  <nav className="customer-sheet-links" aria-label="顧客Googleシート">
+                    <a
+                      className="secondary"
+                      href="https://docs.google.com/spreadsheets/d/1qUKXy871fSHvamUvASyMhwHn5jBe1eYcIk21LEcvByk/edit?gid=418798300#gid=418798300"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      アウトドアのGoogleシートを開く <ArrowUpRight size={16} aria-hidden="true" />
+                    </a>
+                    <a
+                      className="secondary"
+                      href="https://docs.google.com/spreadsheets/d/1rnW0Vqc_NhPDZj4iDMx40Uk9HIvTEo0m3yy6-bb-7x4/edit?gid=892278457#gid=892278457"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      バイクのGoogleシートを開く <ArrowUpRight size={16} aria-hidden="true" />
+                    </a>
+                  </nav>
                   <section className="panel">
                     <div className="customer-tabs" role="group" aria-label="顧客カテゴリー切り替え">
                       {["すべて", ...categories, "未分類"].map((category) => (
