@@ -532,7 +532,9 @@ export default function SalesApp({ userName }: { userName: string }) {
       <aside className="sidebar">
         <div className="brand">
           <div>
-            <span className="monoral-logo"><img src="./brand/monoral_h6.png" alt="MONORAL" /></span>
+            <button type="button" className="brand-home" onClick={() => go("overview")} aria-label="ホーム（概要）に戻る">
+              <span className="monoral-logo"><img src="./brand/monoral_h6.png" alt="MONORAL" /></span>
+            </button>
           </div>
         </div>
         <div className="workspace">
