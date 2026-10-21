@@ -398,7 +398,7 @@ nav button span {
 }
 .stats {
   display: grid;
-  grid-template-columns: 1.45fr 1fr 1fr 1fr;
+  grid-template-columns: 1.45fr 1fr 1fr;
   gap: 17px;
   margin-bottom: 29px;
 }
@@ -1404,3 +1404,8 @@ code {
 .product-sheet-link a { max-width: 100%; white-space: normal; text-decoration: none; }
 .product-sheet-link a svg { flex-shrink: 0; }
 .product-sheet-link a:focus-visible { outline: 2px solid #294f40; outline-offset: 3px; }
+
+.order-party-section { margin: 24px 0; padding: 20px; border: 1px solid var(--line); border-radius: 8px; }
+.order-party-tabs { padding: 0; margin-bottom: 20px; }
+.modal .order-billing-toggle { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+.modal .order-billing-toggle input { width: auto; margin: 0; }

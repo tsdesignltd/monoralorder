@@ -1,6 +1,7 @@
 import { PDFDocument, rgb, type PDFFont } from "pdf-lib";
 import { pdfFontkit as fontkit } from "./pdf-fontkit";
 import {
+  documentDeliveryRecipient,
   number,
   money,
   orderTotals,
@@ -81,7 +82,7 @@ export async function createDocumentPdf(
   if (demo) {
     text("SAMPLE / デモ帳票", 42, 11, rgb(0.6, 0.4, 0.2));
   }
-  text(`No. ${number(row)}`, 390, 10);
+  text(`No. ${d.order.documentNumber || number(row)}`, 390, 10);
   y -= 18;
   text(`発行日 ${d.date}`, 390, 10);
   y -= 25;
@@ -116,7 +117,7 @@ export async function createDocumentPdf(
     9,
   );
   y -= 16;
-  block(`件名：${d.order.title}`, 42, 510, 12);
+  if (d.order.title) block(`件名：${d.order.title}`, 42, 510, 12);
   ensure(60);
   page.drawRectangle({
     x: 42,
@@ -206,6 +207,15 @@ export async function createDocumentPdf(
     block("対象伝票", 42, 510, 11);
     for (const o of d.monthly.orders)
       block(`${o.date}  ${o.number}  ${o.title}`, 42, 510, 9);
+  }
+  const deliveryRecipient = documentDeliveryRecipient(d);
+  if (deliveryRecipient) {
+    ensure(65);
+    y -= 10;
+    rule();
+    block("納品先", 42, 510, 11);
+    block([deliveryRecipient.name, deliveryRecipient.postal, deliveryRecipient.address,
+      deliveryRecipient.contact].filter(Boolean).join("\n"), 42, 510, 10);
   }
   if (d.type.includes("請求") && d.company.bank) {
     ensure(65);

@@ -25,6 +25,9 @@ import {
   productCategories,
   productCategory,
   productInCategory,
+  singleDocument,
+  documentDeliveryRecipient,
+  type OrderParty,
   categories,
   customerCategory,
   businessTypes,
@@ -80,13 +83,6 @@ const kinds = {
   company: "自社情報",
   document: "帳票",
 };
-const statuses = [
-  "見積中",
-  "受注確定",
-  "出荷済",
-  "完了",
-  "キャンセル",
-] as const;
 export default function SalesApp({ userName }: { userName: string }) {
   const [page, setPage] = useState<Page>("overview"),
     [rows, setRows] = useState<Row[]>([]),
@@ -100,6 +96,7 @@ export default function SalesApp({ userName }: { userName: string }) {
     [filter, setFilter] = useState("すべて");
   const [productTab, setProductTab] = useState("すべて");
   const [customerTab, setCustomerTab] = useState("すべて");
+  const [orderPartyTab, setOrderPartyTab] = useState("顧客");
   const [legacyView,setLegacyView] = useState<Row<Order> | null>(null);
   const [monthly, setMonthly] = useState<{
     customerId: string;
@@ -174,12 +171,21 @@ export default function SalesApp({ userName }: { userName: string }) {
                 date: today(),
                 deliveryDate: "",
                 dueDate: "",
-                status: "見積中",
                 businessType: "アウトドア卸売",
                 wholesaleRate: 100,
                 note: "",
                 items: [],
               };
+    if (kind === "order") {
+      const order = data as Order;
+      const customer = customers.find((c) => c.id === order.customerId)?.data;
+      data = {
+        ...order,
+        customerDetails: order.customerDetails || { ...emptyCustomer, ...customer, kana: "" },
+        bankAccount: order.bankAccount ?? company?.data.bank ?? "",
+      };
+      setOrderPartyTab("顧客");
+    }
     setEditing({ kind, row, data });
   }
   async function persist(kind: Kind, data: unknown, row?: Row) {
@@ -244,9 +250,9 @@ export default function SalesApp({ userName }: { userName: string }) {
     if (busy) return;
     if (
       type.includes("請求") &&
-      ["見積中", "キャンセル"].includes(order.data.status)
+      order.data.status === "キャンセル"
     ) {
-      setError("受注を確定してから請求してください");
+      setError("キャンセル済みの受注は請求できません");
       return;
     }
     if (type.includes("請求") && billedIds.has(order.id)) {
@@ -262,15 +268,8 @@ export default function SalesApp({ userName }: { userName: string }) {
       if (demo) {
         if (!company?.data.address)
           throw new Error("自社情報の住所を登録してください");
-        data = {
-          type,
-          date: today(),
-          orderId: order.id,
-          orderNumber: number(order),
-          customer: customers.find((c) => c.id === order.data.customerId)!.data,
-          company: company.data,
-          order: structuredClone(order.data),
-        };
+        data = singleDocument(order, type,
+          customers.find((c) => c.id === order.data.customerId)!.data, company.data);
       }
       const record = await persist("document", data);
       setPreview(record as Row<DocumentData>);
@@ -285,6 +284,19 @@ export default function SalesApp({ userName }: { userName: string }) {
     setEditing((old) =>
       old ? { ...old, data: { ...old.data, [key]: value } as Data } : old,
     );
+  }
+  function selectOrderCustomer(id: string) {
+    const customer = customers.find((c) => c.id === id)?.data;
+    setEditing((old) => old ? { ...old, data: {
+      ...old.data, customerId: id,
+      customerDetails: { ...emptyCustomer, ...customer, kana: "" },
+    } as Order } : old);
+  }
+  function updateOrderParty(key: string, value: string) {
+    if (!editing) return;
+    const order = editing.data as Order;
+    const partyKey = orderPartyTab === "請求先" ? "billingDetails" : "customerDetails";
+    update(partyKey, { ...order[partyKey], [key]: value });
   }
   function lineUpdate(index: number, key: string, value: unknown) {
     if (!editing) return;
@@ -357,13 +369,12 @@ export default function SalesApp({ userName }: { userName: string }) {
           .toLowerCase()
           .includes(search.toLowerCase()),
     )
-    .filter((r) => filter === "すべて" || r.data.status === filter)
     .sort((a, b) => b.data.date.localeCompare(a.data.date) || b.seq - a.seq);
   const month = today().slice(0, 7),
-    confirmed = orders.filter(
+    currentMonthOrders = orders.filter(
       (o) =>
         o.data.date.startsWith(month) &&
-        ["受注確定", "出荷済", "完了"].includes(o.data.status),
+        o.data.status !== "キャンセル",
     );
   const canEdit = connected || demo;
   const billedIds = new Set(
@@ -380,7 +391,7 @@ export default function SalesApp({ userName }: { userName: string }) {
         (o) =>
           !o.data.legacy && o.data.customerId === monthly.customerId &&
           (o.data.deliveryDate || o.data.date).startsWith(monthly.month) &&
-          ["受注確定", "出荷済", "完了"].includes(o.data.status) &&
+          o.data.status !== "キャンセル" &&
           !billedIds.has(o.id),
       )
     : [];
@@ -446,10 +457,10 @@ export default function SalesApp({ userName }: { userName: string }) {
         <table>
           <thead>
             <tr>
-              <th>受注番号 / 件名</th>
+              <th>受注番号</th>
+              <th>業務名称</th>
               <th>顧客</th>
-              <th>受注日 / 業務</th>
-              <th>ステータス</th>
+              <th>受注日／仕切</th>
               <th className="numeric">税込金額</th>
               <th>帳票を発行</th>
               <th />
@@ -463,23 +474,16 @@ export default function SalesApp({ userName }: { userName: string }) {
                     className="text-button"
                     onClick={() => start("order", r)}
                   >
-                    {r.data.title}
+                    {number(r)}
                   </button>
-                  <small>{number(r)}</small>
                 </td>
+                <td>{r.data.businessType}</td>
                 <td>{customerName(r.data.customerId)}</td>
                 <td className="nowrap">
                   {r.data.date.replaceAll("-", ".")}
                   <small>
-                    {r.data.businessType} / 仕切 {r.data.wholesaleRate}%
+                    仕切 {r.data.wholesaleRate}%
                   </small>
-                </td>
-                <td>
-                  <span
-                    className={`badge status-${statuses.indexOf(r.data.status)}`}
-                  >
-                    {r.data.status}
-                  </span>
                 </td>
                 <td className="numeric strong">
                   {money(orderTotals(r.data).total)}
@@ -503,7 +507,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                 <td>
                   <button
                     className="icon-button"
-                    aria-label={`${r.data.title}を編集`}
+                    aria-label={`${number(r)}を編集`}
                     onClick={() => start("order", r)}
                   >
                     <ChevronRight size={17} />
@@ -688,21 +692,17 @@ export default function SalesApp({ userName }: { userName: string }) {
                     <Stat
                       label="今月の受注金額"
                       value={money(
-                        confirmed.reduce(
+                        currentMonthOrders.reduce(
                           (s, r) => s + orderTotals(r.data).total,
                           0,
                         ),
                       )}
-                      sub={`${month.replace("-", "年")}月・確定した受注（税込）`}
+                      sub={`${month.replace("-", "年")}月・受注（税込）`}
                       accent
                     />
                     <Stat
                       label="今月の受注"
-                      value={`${confirmed.length}`}
-                    />
-                    <Stat
-                      label="見積中"
-                      value={`${orders.filter((o) => o.data.status === "見積中").length}`}
+                      value={`${currentMonthOrders.length}`}
                     />
                     <Stat
                       label="登録顧客"
@@ -755,18 +755,8 @@ export default function SalesApp({ userName }: { userName: string }) {
                   <Toolbar
                     search={search}
                     setSearch={setSearch}
-                    placeholder="受注番号・顧客情報・件名を検索"
+                    placeholder="受注番号・顧客情報を検索"
                   >
-                    <select
-                      value={filter}
-                      onChange={(e) => setFilter(e.target.value)}
-                      aria-label="ステータスで絞り込み"
-                    >
-                      <option>すべて</option>
-                      {statuses.map((s) => (
-                        <option key={s}>{s}</option>
-                      ))}
-                    </select>
                   </Toolbar>
                   {orderTable(
                     visibleOrders.filter(
@@ -984,7 +974,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                   <Toolbar
                     search={search}
                     setSearch={setSearch}
-                    placeholder="帳票番号・顧客名・件名で検索"
+                    placeholder="帳票番号・顧客名で検索"
                   >
                     <select
                       value={filter}
@@ -1004,7 +994,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                           <tr>
                             <th>帳票番号</th>
                             <th>種類</th>
-                            <th>顧客 / 件名</th>
+                            <th>顧客</th>
                             <th>発行日</th>
                             <th className="numeric">税込金額</th>
                             <th />
@@ -1032,7 +1022,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                                 </td>
                                 <td>
                                   {r.data.customer.name}
-                                  <small>{r.data.order.title}</small>
+                                  {r.data.order.title && <small>{r.data.order.title}</small>}
                                 </td>
                                 <td>{r.data.date}</td>
                                 <td className="numeric">
@@ -1324,7 +1314,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                   <>
                     <div className="form-grid">
                       <label>
-                        業務種類
+                        業務名称
                         <select
                           value={(editing.data as Order).businessType}
                           onChange={(e) =>
@@ -1357,18 +1347,12 @@ export default function SalesApp({ userName }: { userName: string }) {
                           定価の65%。単価の1円未満を切り捨て。
                         </small>
                       </label>
-                      <Field
-                        label="件名"
-                        required
-                        value={(editing.data as Order).title}
-                        set={(v) => update("title", v)}
-                      />
                       <label>
                         顧客 <span className="required">*</span>
                         <select
                           required
                           value={(editing.data as Order).customerId}
-                          onChange={(e) => update("customerId", e.target.value)}
+                          onChange={(e) => selectOrderCustomer(e.target.value)}
                         >
                           <option value="">顧客を選択</option>
                           {customers.map((c) => (
@@ -1388,30 +1372,55 @@ export default function SalesApp({ userName }: { userName: string }) {
                         value={(editing.data as Order).date}
                         set={(v) => update("date", v)}
                       />
-                      <label>
-                        ステータス
-                        <select
-                          value={(editing.data as Order).status}
-                          onChange={(e) => update("status", e.target.value)}
-                        >
-                          {statuses.map((s) => (
-                            <option key={s}>{s}</option>
-                          ))}
-                        </select>
-                      </label>
                       <Field
-                        label="納品予定日"
-                        type="date"
-                        value={(editing.data as Order).deliveryDate}
-                        set={(v) => update("deliveryDate", v)}
+                        label="納品書・請求書No.（空欄で自動採番）"
+                        value={(editing.data as Order).documentNumber || ""}
+                        set={(v) => update("documentNumber", v)}
                       />
-                      <Field
-                        label="支払期日"
-                        type="date"
-                        value={(editing.data as Order).dueDate}
-                        set={(v) => update("dueDate", v)}
-                      />
+                      {([
+                        ["estimateDate", "見積書発行日"],
+                        ["deliveryIssuedDate", "納品書発行日"],
+                        ["invoiceDate", "請求書発行日"],
+                        ["receiptDate", "領収書発行日"],
+                      ] as const).map(([key, label]) => (
+                        <Field key={key} label={label} type="date"
+                          value={(editing.data as Order)[key] || ""}
+                          set={(v) => update(key, v)} />
+                      ))}
                     </div>
+                    <section className="order-party-section">
+                      <div className="customer-tabs order-party-tabs" role="group" aria-label="伝票の宛先・振込先">
+                        {["顧客", "請求先", "振込先口座"].map((tab) => (
+                          <button key={tab} type="button" aria-pressed={orderPartyTab === tab}
+                            onClick={() => setOrderPartyTab(tab)}>{tab}</button>
+                        ))}
+                      </div>
+                      {orderPartyTab === "振込先口座" ? (
+                        <Field label="振込先口座" area
+                          value={(editing.data as Order).bankAccount ?? company?.data.bank ?? ""}
+                          set={(v) => update("bankAccount", v)} />
+                      ) : (
+                        <>
+                          {orderPartyTab === "顧客" && (
+                            <p className="muted">顧客管理No.：{customers.find((c) => c.id === (editing.data as Order).customerId)?.data.legacyId || (customers.find((c) => c.id === (editing.data as Order).customerId) ? number(customers.find((c) => c.id === (editing.data as Order).customerId)!) : "—")}</p>
+                          )}
+                          {orderPartyTab === "請求先" && (
+                            <label className="order-billing-toggle">
+                              <input type="checkbox" checked={!!(editing.data as Order).billingDetails}
+                                onChange={(e) => update("billingDetails", e.target.checked
+                                  ? structuredClone((editing.data as Order).customerDetails) : undefined)} />
+                              納品先とは別の請求先を指定する
+                            </label>
+                          )}
+                          {(orderPartyTab === "顧客" || (editing.data as Order).billingDetails) && (
+                            <OrderPartyFields
+                              party={((editing.data as Order)[orderPartyTab === "請求先" ? "billingDetails" : "customerDetails"])!}
+                              set={updateOrderParty} />
+                          )}
+                        </>
+                      )}
+                      <p className="muted">この伝票の宛先情報として保存します。</p>
+                    </section>
                     <div className="line-heading">
                       <h3>商品明細</h3>
                       <select
@@ -1546,7 +1555,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                       </small>
                     </div>
                     <Field
-                      label="備考（帳票に表示）"
+                      label="メモ（帳票に表示）"
                       area
                       value={(editing.data as Order).note}
                       set={(v) => update("note", v)}
@@ -1643,7 +1652,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                 />
               </div>
               <p className="muted" style={{ margin: "20px 0" }}>
-                納品予定日（未指定の場合は受注日）が対象月の確定済み伝票を集計します。単体請求・納品請求・合計請求で請求済みの伝票は除外します。
+                納品予定日（未指定の場合は受注日）が対象月の伝票を集計します。単体請求・納品請求・合計請求で請求済みの伝票は除外します。
               </p>
               <div className="table-wrap">
                 <table>
@@ -1801,6 +1810,18 @@ function Empty({
     </div>
   );
 }
+function OrderPartyFields({ party, set }: { party: OrderParty; set: (key: string, value: string) => void }) {
+  return <div className="form-grid">
+    {([
+      ["name", "会社名・店舗名"], ["kana", "会社名ふりがな"],
+      ["contact", "担当者"], ["postal", "郵便番号"],
+      ["address", "住所"], ["phone", "電話"], ["fax", "Fax"], ["email", "メールアドレス"],
+    ] as const).map(([key, label]) => (
+      <Field key={key} label={label} required={key === "name"} value={party[key] || ""}
+        area={key === "address"} set={(v) => set(key, v)} />
+    ))}
+  </div>;
+}
 function Field({
   label,
   value,
@@ -1850,7 +1871,7 @@ function Document({ row, demo }: { row: Row<DocumentData>; demo: boolean }) {
         <div>
           <h1>{d.type}</h1>
           <p>
-            No. {number(row)}
+            No. {d.order.documentNumber || number(row)}
             <br />
             発行日 {d.date}
           </p>
@@ -1886,7 +1907,7 @@ function Document({ row, demo }: { row: Row<DocumentData>; demo: boolean }) {
           </p>
         </div>
       </div>
-      <p className="paper-subject">件名：{d.order.title}</p>
+      {d.order.title && <p className="paper-subject">件名：{d.order.title}</p>}
       <div className="paper-amount">
         <span>
           {d.type === "見積書"
@@ -1967,6 +1988,13 @@ function Document({ row, demo }: { row: Row<DocumentData>; demo: boolean }) {
           <strong>{money(documentTotal(d))}</strong>
         </div>
       </div>
+      {documentDeliveryRecipient(d) && (
+        <section className="paper-note">
+          <h3>納品先</h3>
+          <p>{[documentDeliveryRecipient(d)!.name, documentDeliveryRecipient(d)!.postal,
+            documentDeliveryRecipient(d)!.address, documentDeliveryRecipient(d)!.contact].filter(Boolean).join("\n")}</p>
+        </section>
+      )}
       {d.type.includes("請求") && d.company.bank && (
         <section className="paper-note">
           <h3>お振込先</h3>

@@ -4,6 +4,9 @@ import {
   productInCategory,
   productSchema,
   emptyProduct,
+  singleDocument,
+  documentDeliveryRecipient,
+  orderPartySchema,
   orderTotals,
   customerCategory,
   customerSchema,
@@ -149,3 +152,42 @@ assert.equal(productCategory({ category: "アウトドア", note: "分類: バ�
 assert.equal(productInCategory({ note: "" }, "すべて"), true);
 assert.equal(productSchema.parse({ ...emptyProduct, sku: "TEST", name: "分類確認", category: "共通" }).category, "共通");
 assert.equal(productSchema.safeParse({ ...emptyProduct, sku: "TEST", name: "分類確認", category: "不明" }).success, false);
+
+const { status: previousStatus, ...withoutStatus } = base;
+assert.equal(orderSchema.parse(withoutStatus).status, undefined);
+assert.equal(orderSchema.parse({ ...base, status: "キャンセル" }).status, "キャンセル");
+assert.equal(orderTotals(withoutStatus).total, orderTotals(base).total);
+
+const shipParty = orderPartySchema.parse({ ...emptyCustomer, name: "納品先店舗", kana: "ノウヒンサキ", address: "東京都千代田区1-2-3", contact: "担当太郎", fax: "03-0000-0001" });
+const billParty = { ...shipParty, name: "請求先本社", address: "大阪府大阪市4-5-6" };
+const entry = row(orderSchema.parse({ ...withoutStatus, documentNumber: "962", estimateDate: "2026-10-01", deliveryIssuedDate: "2026-10-02", invoiceDate: "2026-10-03", receiptDate: "2026-10-04", customerDetails: shipParty, billingDetails: billParty, bankAccount: "伝票専用の振込先" }), 99);
+const invoice = singleDocument(entry, "請求書", { ...emptyCustomer, name: "マスター顧客" }, emptyCompany);
+assert.equal(invoice.date, "2026-10-03");
+assert.equal(invoice.orderNumber, "962");
+assert.equal(invoice.customer.name, "請求先本社");
+assert.equal(invoice.company.bank, "伝票専用の振込先");
+assert.equal(documentDeliveryRecipient(invoice)?.name, "納品先店舗");
+assert.equal(invoice.order.receiptDate, "2026-10-04");
+const deliveryDoc = singleDocument(entry, "納品書", emptyCustomer, emptyCompany);
+assert.equal(deliveryDoc.date, "2026-10-02");
+assert.equal(deliveryDoc.customer.name, "納品先店舗");
+assert.equal(documentDeliveryRecipient(deliveryDoc), undefined);
+assert.equal(singleDocument(entry, "見積書", emptyCustomer, emptyCompany).date, "2026-10-01");
+assert.equal(singleDocument(entry, "納品請求書", emptyCustomer, emptyCompany).date, "2026-10-03");
+entry.data.customerDetails!.name = "変更後";
+entry.data.billingDetails!.name = "変更後請求先";
+entry.data.bankAccount = "変更後口座";
+assert.equal(invoice.customer.name, "請求先本社");
+assert.equal(invoice.order.customerDetails!.name, "納品先店舗");
+assert.equal(invoice.company.bank, "伝票専用の振込先");
+assert.equal(orderSchema.safeParse({ ...base, estimateDate: "2026-02-30" }).success, false);
+assert.equal(orderSchema.safeParse({ ...base, customerDetails: { ...shipParty, name: "" } }).success, false);
+const oldDoc = singleDocument(row(base, 1), "請求書", { ...emptyCustomer, name: "旧顧客" }, { ...emptyCompany, bank: "既定口座" });
+assert.equal(oldDoc.customer.name, "旧顧客");
+assert.equal(oldDoc.company.bank, "既定口座");
+console.log("PASS: order entry dates, separate billing recipient, account overrides and immutable snapshots");
+
+const { title: previousTitle, ...withoutTitle } = withoutStatus;
+assert.equal(orderSchema.parse(withoutTitle).title, "");
+assert.equal(orderSchema.parse({ ...withoutStatus, title: "" }).title, "");
+assert.equal(singleDocument(row(orderSchema.parse(withoutTitle), 2), "納品書", emptyCustomer, emptyCompany).order.title, "");

@@ -40,7 +40,7 @@ export async function POST(req: Request) {
         (r) =>
           r.data.customerId !== body.customerId ||
           !(r.data.deliveryDate || r.data.date).startsWith(body.month) ||
-          !["受注確定", "出荷済", "完了"].includes(r.data.status),
+          r.data.status === "キャンセル",
       )
     )
       return Response.json(

@@ -7,8 +7,7 @@ import {
   customerSchema,
   productSchema,
   orderSchema,
-  snapshotOrder,
-  number,
+  singleDocument,
   type Row,
   type Order,
   type Customer,
@@ -88,20 +87,10 @@ export async function POST(req: Request) {
         );
       if (
         input.type.includes("請求") &&
-        ["見積中", "キャンセル"].includes(order.data.status)
+        order.data.status === "キャンセル"
       )
-        return response({ error: "受注を確定してから請求してください" }, 400);
-      data = {
-        type: input.type,
-        date: new Date().toLocaleDateString("sv-SE", {
-          timeZone: "Asia/Tokyo",
-        }),
-        orderId: order.id,
-        orderNumber: number(order),
-        customer: customers[0].data,
-        company: companies[0].data,
-        order: snapshotOrder(order.data),
-      };
+        return response({ error: "キャンセル済みの受注は請求できません" }, 400);
+      data = singleDocument(order, input.type, customers[0].data, companies[0].data);
       if (input.type.includes("請求")) {
         const result = await database("rpc/monoral_issue_document", {
           method: "POST",

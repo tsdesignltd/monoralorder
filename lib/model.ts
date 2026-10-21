@@ -68,13 +68,33 @@ export const lineSchema = z.object({
   price: z.number().int().min(0).max(100000000),
   tax: z.union([z.literal(0), z.literal(8), z.literal(10)]),
 });
+export const orderPartySchema = z.object({
+  name: required,
+  kana: text.default(""),
+  contact: text,
+  address: text,
+  postal: text,
+  phone: text,
+  fax: text,
+  email: text,
+});
+export type OrderParty = z.infer<typeof orderPartySchema>;
 export const orderSchema = z.object({
   customerId: z.string().uuid(),
-  title: required,
+  documentNumber: z.string().trim().max(100).optional(),
+  estimateDate: optionalDate.optional(),
+  deliveryIssuedDate: optionalDate.optional(),
+  invoiceDate: optionalDate.optional(),
+  receiptDate: optionalDate.optional(),
+  customerDetails: orderPartySchema.optional(),
+  billingDetails: orderPartySchema.optional(),
+  bankAccount: text.optional(),
+  title: z.string().trim().max(200).default(""),
   date,
   deliveryDate: optionalDate,
   dueDate: optionalDate,
-  status: z.enum(["見積中", "受注確定", "出荷済", "完了", "キャンセル"]),
+  // 旧データの状態は保持するが、新規受注では記録しない。
+  status: z.enum(["見積中", "受注確定", "出荷済", "完了", "キャンセル"]).optional(),
   // 既存伝票・発行済み帳票の旧区分は引き続き読み書き可能にする。
   businessType: z.union([z.enum(businessTypes), z.literal("卸販売")]),
   wholesaleRate: z
@@ -126,6 +146,29 @@ export type DocumentData = {
     }[];
   };
 };
+// A document keeps the selected recipient, date and account as an immutable snapshot.
+export function singleDocument(
+  row: Row<Order>, type: DocumentData["type"], customer: Customer, company: Company,
+): DocumentData {
+  if (type === "合計請求書") throw new Error("合計請求書は月締めで作成してください");
+  const order = snapshotOrder(row.data);
+  const recipient = { ...customer, ...order.customerDetails };
+  const billTo = type.includes("請求") && order.billingDetails;
+  const issueDate = type === "見積書" ? order.estimateDate
+    : type === "納品書" ? order.deliveryIssuedDate
+    : order.invoiceDate || (type === "納品請求書" ? order.deliveryIssuedDate : "");
+  return {
+    type, date: issueDate || today(), orderId: row.id,
+    orderNumber: order.documentNumber || number(row),
+    customer: billTo ? { ...customer, ...billTo } : recipient,
+    company: { ...company, bank: order.bankAccount ?? company.bank },
+    order,
+  };
+}
+export function documentDeliveryRecipient(d: DocumentData): OrderParty | undefined {
+  return !d.monthly && d.type.includes("請求") && d.order.billingDetails
+    ? d.order.customerDetails : undefined;
+}
 export type Kind = "customer" | "product" | "order" | "company" | "document";
 export type Data = Customer | Product | Order | Company | DocumentData;
 export type Row<T = Data> = {
