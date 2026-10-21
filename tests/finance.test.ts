@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import {
+  productCategory,
+  productInCategory,
+  productSchema,
+  emptyProduct,
   orderTotals,
   customerCategory,
   customerSchema,
@@ -132,3 +136,16 @@ assert.equal(customerCategory("その他"), "未分類");
 for (const category of ["アウトドア", "バイク", "アウトドアショップ", "自転車店", "代理店", "その他"]) {
   assert.equal(customerSchema.parse({ ...emptyCustomer, name: "分類テスト", category }).category, category);
 }
+
+const importedCommon = { note: "分類: バイク\nJAN: 123\n分類: アウトドア・バイク共通" };
+assert.equal(productCategory(importedCommon), "共通");
+assert.equal(productInCategory(importedCommon, "アウトドア"), true);
+assert.equal(productInCategory(importedCommon, "バイク"), true);
+assert.equal(productInCategory(importedCommon, "未分類"), false);
+assert.equal(productCategory({ note: "分類: アウトドア" }), "アウトドア");
+assert.equal(productCategory({ note: "分類: バイク" }), "バイク");
+assert.equal(productCategory({ note: "バイクにも使える商品" }), "未分類");
+assert.equal(productCategory({ category: "アウトドア", note: "分類: バイク" }), "アウトドア");
+assert.equal(productInCategory({ note: "" }, "すべて"), true);
+assert.equal(productSchema.parse({ ...emptyProduct, sku: "TEST", name: "分類確認", category: "共通" }).category, "共通");
+assert.equal(productSchema.safeParse({ ...emptyProduct, sku: "TEST", name: "分類確認", category: "不明" }).success, false);

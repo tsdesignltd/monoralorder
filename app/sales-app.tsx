@@ -22,6 +22,9 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import {
+  productCategories,
+  productCategory,
+  productInCategory,
   categories,
   customerCategory,
   businessTypes,
@@ -95,6 +98,7 @@ export default function SalesApp({ userName }: { userName: string }) {
     [notice, setNotice] = useState(""),
     [search, setSearch] = useState(""),
     [filter, setFilter] = useState("すべて");
+  const [productTab, setProductTab] = useState("すべて");
   const [customerTab, setCustomerTab] = useState("すべて");
   const [legacyView,setLegacyView] = useState<Row<Order> | null>(null);
   const [monthly, setMonthly] = useState<{
@@ -161,7 +165,7 @@ export default function SalesApp({ userName }: { userName: string }) {
       : kind === "customer"
         ? { ...emptyCustomer, category: customerTab === "バイク" ? "バイク" : "アウトドア" }
         : kind === "product"
-          ? { ...emptyProduct }
+          ? { ...emptyProduct, category: productTab === "バイク" ? "バイク" : productTab === "アウトドア" ? "アウトドア" : "未分類" }
           : kind === "company"
             ? { ...emptyCompany }
             : {
@@ -344,6 +348,7 @@ export default function SalesApp({ userName }: { userName: string }) {
   const visibleCustomers = customers.filter(matches).filter(
     (r) => customerTab === "すべて" || customerCategory(r.data.category) === customerTab,
   );
+  const visibleProducts = products.filter(matches).filter((r) => productInCategory(r.data, productTab));
   const visibleOrders = orders
     .filter(
       (r) =>
@@ -884,15 +889,39 @@ export default function SalesApp({ userName }: { userName: string }) {
                 </>
               )}
               {page === "product" && (
+                <>
+                  <div className="product-sheet-link">
+                    <a
+                      className="secondary"
+                      href="https://docs.google.com/spreadsheets/d/171U8anjE4TgaW6zx_ck6VtnUNxvGe7OezK7B6FW_Czo/edit?gid=235568333#gid=235568333"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      商品リストのGoogleシートを開く <ArrowUpRight size={16} aria-hidden="true" />
+                    </a>
+                  </div>
                 <section className="panel">
+                  <div className="customer-tabs" role="group" aria-label="商品カテゴリー切り替え">
+                    {["すべて", ...categories, "未分類"].map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        aria-pressed={productTab === category}
+                        onClick={() => setProductTab(category)}
+                      >
+                        {category}
+                        <span>{products.filter((r) => productInCategory(r.data, category)).length}</span>
+                      </button>
+                    ))}
+                  </div>
                   <Toolbar
                     search={search}
                     setSearch={setSearch}
                     placeholder="商品名・商品コードで検索"
                   >
-                    <span className="muted">{products.length} 商品</span>
+                    <span className="muted">{visibleProducts.length} 商品</span>
                   </Toolbar>
-                  {products.length ? (
+                  {visibleProducts.length ? (
                     <div className="table-wrap">
                       <table>
                         <thead>
@@ -906,7 +935,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {products.filter(matches).map((r) => (
+                          {visibleProducts.map((r) => (
                             <tr key={r.id}>
                               <td>
                                 <button
@@ -915,7 +944,6 @@ export default function SalesApp({ userName }: { userName: string }) {
                                 >
                                   {r.data.name}
                                 </button>
-                                <small>{r.data.note}</small>
                               </td>
                               <td>
                                 <code>{r.data.sku}</code>
@@ -941,14 +969,15 @@ export default function SalesApp({ userName }: { userName: string }) {
                     </div>
                   ) : (
                     <Empty
-                      label="商品を登録しましょう"
-                      description="単価と税率を設定すると、受注の明細をすばやく入力できます。"
+                      label={products.length ? "条件に一致する商品がありません" : "商品を登録しましょう"}
+                      description={products.length ? "カテゴリーを切り替えるか、検索条件を変更してください。" : "単価と税率を設定すると、受注の明細をすばやく入力できます。"}
                       button="商品を登録"
                       disabled={!canEdit}
                       action={() => start("product")}
                     />
                   )}
                 </section>
+                </>
               )}
               {page === "document" && (
                 <section className="panel">
@@ -1213,6 +1242,16 @@ export default function SalesApp({ userName }: { userName: string }) {
                 )}
                 {editing.kind === "product" && (
                   <div className="form-grid">
+                    <label>
+                      カテゴリー
+                      <select
+                        value={productCategory(editing.data as Product)}
+                        onChange={(e) => update("category", e.target.value)}
+                      >
+                        {productCategories.map((category) => <option key={category}>{category}</option>)}
+                      </select>
+                      <small>共通の商品はアウトドア・バイクの両方に表示します。</small>
+                    </label>
                     <Field
                       label="商品名"
                       required

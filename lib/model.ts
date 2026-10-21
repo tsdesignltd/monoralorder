@@ -36,14 +36,29 @@ export const customerSchema = z.object({
   legacyId: text.default(""),
   fax: text.default(""),
 });
+export const productCategories = ["アウトドア", "バイク", "共通", "未分類"] as const;
 export const productSchema = z.object({
   name: required,
   sku: required,
+  category: z.enum(productCategories).optional(),
   price: z.number().int().min(0).max(100000000),
   unit: required,
   tax: z.union([z.literal(0), z.literal(8), z.literal(10)]),
   note: text,
 });
+// 取り込み済み商品は備考の分類を利用し、編集後は専用フィールドを優先する。
+export function productCategory(product: Pick<Product, "category" | "note">): (typeof productCategories)[number] {
+  if (product.category) return product.category;
+  const labels = product.note.split(/\r?\n/).filter((line) => /^分類\s*[:：]/.test(line));
+  const outdoor = labels.some((line) => line.includes("アウトドア"));
+  const bike = labels.some((line) => line.includes("バイク"));
+  return outdoor && bike ? "共通" : outdoor ? "アウトドア" : bike ? "バイク" : "未分類";
+}
+export function productInCategory(product: Pick<Product, "category" | "note">, category: string): boolean {
+  const actual = productCategory(product);
+  return category === "すべて" || actual === category ||
+    (actual === "共通" && (category === "アウトドア" || category === "バイク"));
+}
 export const lineSchema = z.object({
   productId: z.string(),
   name: required,
