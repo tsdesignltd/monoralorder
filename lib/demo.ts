@@ -74,7 +74,7 @@ export function demoRecords(): Row[] {
         deliveryDate: "",
         dueDate: "",
         status: "受注確定",
-        businessType: "卸販売",
+        businessType: "アウトドア卸売",
         wholesaleRate: 65,
         note: "これは操作確認用の架空データです。",
         items: [

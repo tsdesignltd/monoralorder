@@ -15,7 +15,7 @@ export const categories = [
   "代理店",
   "その他",
 ] as const;
-export const businessTypes = ["卸販売", "サンプル販売", "返品処理", "保証交換"] as const;
+export const businessTypes = ["アウトドア卸売", "バイク卸売", "サンプル販売", "保証交換", "返品処理"] as const;
 export const documentTypes = [
   "見積書",
   "納品書",
@@ -59,7 +59,8 @@ export const orderSchema = z.object({
   deliveryDate: optionalDate,
   dueDate: optionalDate,
   status: z.enum(["見積中", "受注確定", "出荷済", "完了", "キャンセル"]),
-  businessType: z.enum(businessTypes),
+  // 既存伝票・発行済み帳票の旧区分は引き続き読み書き可能にする。
+  businessType: z.union([z.enum(businessTypes), z.literal("卸販売")]),
   wholesaleRate: z
     .number()
     .min(0)

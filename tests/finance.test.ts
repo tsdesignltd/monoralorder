@@ -114,3 +114,11 @@ assert.equal(
 console.log(
   "PASS: wholesale rates, return signs, validation, monthly balances, monthly tax rounding",
 );
+
+// 新しい業務区分と既存の卸販売をどちらも保存でき、卸の計算は同じ。
+for (const businessType of ["アウトドア卸売", "バイク卸売", "サンプル販売", "保証交換", "返品処理", "卸販売"] as const) {
+  const parsed = orderSchema.parse({ ...base, businessType });
+  assert.equal(parsed.businessType, businessType);
+  assert.equal(orderTotals(parsed).total, orderTotals(base).total * (businessType === "返品処理" ? -1 : 1));
+}
+assert.equal(orderSchema.safeParse({ ...base, businessType: "未定義" }).success, false);

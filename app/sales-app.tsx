@@ -170,7 +170,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                 deliveryDate: "",
                 dueDate: "",
                 status: "見積中",
-                businessType: "卸販売",
+                businessType: "アウトドア卸売",
                 wholesaleRate: 100,
                 note: "",
                 items: [],
@@ -1276,6 +1276,9 @@ export default function SalesApp({ userName }: { userName: string }) {
                             update("businessType", e.target.value)
                           }
                         >
+                          {(editing.data as Order).businessType === "卸販売" && (
+                            <option value="卸販売" disabled>卸販売（旧区分）</option>
+                          )}
                           {businessTypes.map((t) => (
                             <option key={t}>{t}</option>
                           ))}
