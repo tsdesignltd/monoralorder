@@ -9,12 +9,13 @@ const date = z
       !isNaN(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v,
   );
 const optionalDate = z.union([date, z.literal("")]);
-export const categories = [
-  "アウトドアショップ",
-  "自転車店",
-  "代理店",
-  "その他",
-] as const;
+export const categories = ["アウトドア", "バイク"] as const;
+const legacyCategories = ["アウトドアショップ", "自転車店", "代理店", "その他"] as const;
+export function customerCategory(category: string): "アウトドア" | "バイク" | "未分類" {
+  if (category === "アウトドア" || category === "アウトドアショップ") return "アウトドア";
+  if (category === "バイク" || category === "自転車店") return "バイク";
+  return "未分類";
+}
 export const businessTypes = ["アウトドア卸売", "バイク卸売", "サンプル販売", "保証交換", "返品処理"] as const;
 export const documentTypes = [
   "見積書",
@@ -31,7 +32,7 @@ export const customerSchema = z.object({
   email: text,
   phone: text,
   note: text,
-  category: z.enum(categories),
+  category: z.union([z.enum(categories), z.enum(legacyCategories)]),
   legacyId: text.default(""),
   fax: text.default(""),
 });

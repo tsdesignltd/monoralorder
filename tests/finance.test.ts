@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import {
   orderTotals,
+  customerCategory,
+  customerSchema,
   unitPrice,
   monthlyDocument,
   documentTotal,
@@ -122,3 +124,11 @@ for (const businessType of ["アウトドア卸売", "バイク卸売", "サン�
   assert.equal(orderTotals(parsed).total, orderTotals(base).total * (businessType === "返品処理" ? -1 : 1));
 }
 assert.equal(orderSchema.safeParse({ ...base, businessType: "未定義" }).success, false);
+
+assert.equal(customerCategory("アウトドアショップ"), "アウトドア");
+assert.equal(customerCategory("自転車店"), "バイク");
+assert.equal(customerCategory("代理店"), "未分類");
+assert.equal(customerCategory("その他"), "未分類");
+for (const category of ["アウトドア", "バイク", "アウトドアショップ", "自転車店", "代理店", "その他"]) {
+  assert.equal(customerSchema.parse({ ...emptyCustomer, name: "分類テスト", category }).category, category);
+}

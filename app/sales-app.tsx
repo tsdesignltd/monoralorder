@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import {
   categories,
+  customerCategory,
   businessTypes,
   documentTypes,
   orderTotals,
@@ -95,6 +96,7 @@ export default function SalesApp({ userName }: { userName: string }) {
     [notice, setNotice] = useState(""),
     [search, setSearch] = useState(""),
     [filter, setFilter] = useState("すべて");
+  const [customerTab, setCustomerTab] = useState("すべて");
   const [legacyView,setLegacyView] = useState<Row<Order> | null>(null);
   const [monthly, setMonthly] = useState<{
     customerId: string;
@@ -158,7 +160,7 @@ export default function SalesApp({ userName }: { userName: string }) {
     let data: Data = row
       ? structuredClone(row.data)
       : kind === "customer"
-        ? { ...emptyCustomer }
+        ? { ...emptyCustomer, category: customerTab === "バイク" ? "バイク" : "アウトドア" }
         : kind === "product"
           ? { ...emptyProduct }
           : kind === "company"
@@ -340,6 +342,9 @@ export default function SalesApp({ userName }: { userName: string }) {
   const matches = (r: Row) =>
     JSON.stringify(r.data).toLowerCase().includes(search.toLowerCase()) ||
     number(r).toLowerCase().includes(search.toLowerCase());
+  const visibleCustomers = customers.filter(matches).filter(
+    (r) => customerTab === "すべて" || customerCategory(r.data.category) === customerTab,
+  );
   const visibleOrders = orders
     .filter(
       (r) =>
@@ -777,24 +782,27 @@ export default function SalesApp({ userName }: { userName: string }) {
                     }
                   />
                   <section className="panel">
+                    <div className="customer-tabs" role="group" aria-label="顧客カテゴリー切り替え">
+                      {["すべて", ...categories, "未分類"].map((category) => (
+                        <button
+                          key={category}
+                          type="button"
+                          aria-pressed={customerTab === category}
+                          onClick={() => setCustomerTab(category)}
+                        >
+                          {category}
+                          <span>{customers.filter((r) => category === "すべて" || customerCategory(r.data.category) === category).length}</span>
+                        </button>
+                      ))}
+                    </div>
                     <Toolbar
                       search={search}
                       setSearch={setSearch}
                       placeholder="顧客名・担当者・連絡先で検索"
                     >
-                      <select
-                        value={filter}
-                        onChange={(e) => setFilter(e.target.value)}
-                        aria-label="顧客カテゴリー"
-                      >
-                        <option>すべて</option>
-                        {categories.map((c) => (
-                          <option key={c}>{c}</option>
-                        ))}
-                      </select>
-                      <span className="muted">{customers.length} 件</span>
+                      <span className="muted">{visibleCustomers.length} 件</span>
                     </Toolbar>
-                    {customers.length ? (
+                    {visibleCustomers.length ? (
                       <div className="table-wrap">
                         <table>
                           <thead>
@@ -808,13 +816,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                             </tr>
                           </thead>
                           <tbody>
-                            {customers
-                              .filter(matches)
-                              .filter(
-                                (r) =>
-                                  filter === "すべて" ||
-                                  r.data.category === filter,
-                              )
+                            {visibleCustomers
                               .map((r) => (
                                 <tr key={r.id}>
                                   <td>
@@ -828,7 +830,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                                   </td>
                                   <td>
                                     <span className="badge">
-                                      {r.data.category}
+                                      {customerCategory(r.data.category)}
                                     </span>
                                     <small>{r.data.contact || "—"}</small>
                                   </td>
@@ -860,8 +862,8 @@ export default function SalesApp({ userName }: { userName: string }) {
                       </div>
                     ) : (
                       <Empty
-                        label="顧客を登録しましょう"
-                        description="登録した顧客は、受注と帳票の作成時に選べます。"
+                        label={customers.length ? "条件に一致する顧客がいません" : "顧客を登録しましょう"}
+                        description={customers.length ? "カテゴリーを切り替えるか、検索条件を変更してください。" : "登録した顧客は、受注と帳票の作成時に選べます。"}
                         button="顧客を登録"
                         disabled={!canEdit}
                         action={() => start("customer")}
@@ -1147,9 +1149,12 @@ export default function SalesApp({ userName }: { userName: string }) {
                     <label>
                       カテゴリー
                       <select
-                        value={(editing.data as Customer).category}
+                        value={customerCategory((editing.data as Customer).category) === "未分類" ? (editing.data as Customer).category : customerCategory((editing.data as Customer).category)}
                         onChange={(e) => update("category", e.target.value)}
                       >
+                        {customerCategory((editing.data as Customer).category) === "未分類" && (
+                          <option value={(editing.data as Customer).category} disabled>未分類（カテゴリーを選択）</option>
+                        )}
                         {categories.map((c) => (
                           <option key={c}>{c}</option>
                         ))}
