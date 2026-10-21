@@ -688,19 +688,16 @@ export default function SalesApp({ userName }: { userName: string }) {
                       accent
                     />
                     <Stat
-                      label="進行中の受注"
-                      value={`${orders.filter((o) => ["受注確定", "出荷済"].includes(o.data.status)).length}`}
-                      sub="受注確定・出荷済"
+                      label="今月の受注"
+                      value={`${confirmed.length}`}
                     />
                     <Stat
                       label="見積中"
                       value={`${orders.filter((o) => o.data.status === "見積中").length}`}
-                      sub="確認・ご返答待ち"
                     />
                     <Stat
                       label="登録顧客"
                       value={`${customers.length}`}
-                      sub="大切な取引先"
                     />
                   </div>
                   <section className="panel">
@@ -1682,14 +1679,14 @@ function Stat({
 }: {
   label: string;
   value: string;
-  sub: string;
+  sub?: string;
   accent?: boolean;
 }) {
   return (
     <div className={`stat ${accent ? "accent" : ""}`}>
       <span>{label}</span>
       <strong>{value}</strong>
-      <small>{sub}</small>
+      {sub && <small>{sub}</small>}
     </div>
   );
 }
