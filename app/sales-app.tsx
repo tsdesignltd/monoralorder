@@ -490,7 +490,7 @@ export default function SalesApp({ userName }: { userName: string }) {
                         onClick={() => issue(r, t)}
                         title={`${t}を新規発行`}
                       >
-                        {t === "請求書" ? "単体請求" : t.slice(0, -1)}
+                        {t}
                       </button>
                     ))}
                   </div>
