@@ -1,4 +1,5 @@
 "use client";
+import CustomerPicker from "./customer-picker";
 import { documentGreeting } from "../lib/document-text";
 import { apiFetch } from "../lib/client-api";
 import { useState, useEffect, type FormEvent } from "react";
@@ -1351,24 +1352,9 @@ export default function SalesApp({ userName }: { userName: string }) {
                           定価の65%。単価の1円未満を切り捨て。
                         </small>
                       </label>
-                      <label>
-                        顧客 <span className="required">*</span>
-                        <select
-                          required
-                          value={(editing.data as Order).customerId}
-                          onChange={(e) => selectOrderCustomer(e.target.value)}
-                        >
-                          <option value="">顧客を選択</option>
-                          {customers.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.data.name}
-                            </option>
-                          ))}
-                        </select>
-                        {!customers.length && (
-                          <small>先に顧客管理で顧客を登録してください。</small>
-                        )}
-                      </label>
+                      <CustomerPicker customers={customers} required
+                        value={(editing.data as Order).customerId}
+                        onChange={selectOrderCustomer} />
                       <Field
                         label="受注日"
                         required
@@ -1622,21 +1608,9 @@ export default function SalesApp({ userName }: { userName: string }) {
             <div className="modal-body">
               {error && <div className="error">{error}</div>}
               <div className="form-grid">
-                <label className="full-width">
-                  顧客
-                  <select
-                    value={monthly.customerId}
-                    onChange={(e) =>
-                      setMonthly({ ...monthly, customerId: e.target.value })
-                    }
-                  >
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.data.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <CustomerPicker className="full-width" customers={customers} required
+                  value={monthly.customerId}
+                  onChange={id => setMonthly({ ...monthly, customerId: id })} />
                 <Field label="開始日" type="date" value={monthly.startDate}
                   set={(v)=>setMonthly({...monthly,startDate:v})} />
                 <Field label="終了日" type="date" value={monthly.endDate}

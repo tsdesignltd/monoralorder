@@ -1435,3 +1435,10 @@ code {
 .paper-summary > div { display: grid; grid-template-columns: minmax(0, 1fr) 110px; padding: 0; }
 .paper-summary > div > span, .paper-summary > div > strong { padding: 9px 8px; text-align: right; }
 .paper-summary > div > strong { border-left: 1px solid #999; }
+
+.customer-picker { min-width: 0; }
+.customer-picker-search { position: relative; margin-top: 8px; }
+.customer-picker-search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #718064; pointer-events: none; }
+.customer-picker-search input { width: 100%; min-width: 0; padding: 10px 10px 10px 34px; font-size: 13px; }
+.customer-picker > select { display: block; width: 100%; margin-top: 8px; padding: 10px; font-size: 13px; }
+.customer-picker > small { display: block; margin-top: 6px; color: #718064; font-size: 11px; line-height: 1.7; }
