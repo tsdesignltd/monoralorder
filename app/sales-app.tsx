@@ -104,6 +104,7 @@ export default function SalesApp({ userName }: { userName: string }) {
   const [productTab, setProductTab] = useState("すべて");
   const [customerTab, setCustomerTab] = useState("すべて");
   const [orderPartyTab, setOrderPartyTab] = useState("顧客");
+  const [wholesaleRateInput, setWholesaleRateInput] = useState("100");
   const [legacyView,setLegacyView] = useState<Row<Order> | null>(null);
   const [monthly, setMonthly] = useState<{
     customerId: string;
@@ -186,6 +187,7 @@ export default function SalesApp({ userName }: { userName: string }) {
               };
     if (kind === "order") {
       const order = data as Order;
+      setWholesaleRateInput(String(order.wholesaleRate));
       const customer = customers.find((c) => c.id === order.customerId)?.data;
       data = {
         ...order,
@@ -1337,15 +1339,21 @@ export default function SalesApp({ userName }: { userName: string }) {
                       <label>
                         仕切り率（%）
                         <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
+                          type="text"
+                          inputMode="decimal"
                           required
-                          value={(editing.data as Order).wholesaleRate}
-                          onChange={(e) =>
-                            update("wholesaleRate", Number(e.target.value))
-                          }
+                          pattern="[0-9]+([.][0-9]{1,2})?"
+                          title="0〜100の数値を小数第2位まで入力してください"
+                          value={wholesaleRateInput}
+                          onChange={(e) => {
+                            const input = e.currentTarget;
+                            const value = input.value.normalize("NFKC");
+                            const rate = Number(value);
+                            const valid = /^[0-9]+(?:[.][0-9]{1,2})?$/.test(value) && rate >= 0 && rate <= 100;
+                            setWholesaleRateInput(value);
+                            input.setCustomValidity(value && !valid ? "0〜100の数値を小数第2位まで入力してください" : "");
+                            if (valid) update("wholesaleRate", rate);
+                          }}
                         />
                         <small>
                           定価 × 仕切り率。例：65% =
