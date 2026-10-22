@@ -1442,3 +1442,27 @@ code {
 .customer-picker-search input { width: 100%; min-width: 0; padding: 10px 10px 10px 34px; font-size: 13px; }
 .customer-picker > select { display: block; width: 100%; margin-top: 8px; padding: 10px; font-size: 13px; }
 .customer-picker > small { display: block; margin-top: 6px; color: #718064; font-size: 11px; line-height: 1.7; }
+
+.order-items-section { margin-top: 26px; }
+.order-items-section .line-heading { gap: 12px; margin: 0 0 12px; }
+.order-items-section .line-heading small, .order-items-help { color: #718064; font-size: 11px; }
+.order-items-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+.order-items-table { width: 100%; min-width: 860px; table-layout: fixed; border-collapse: collapse; }
+.order-items-table th { padding: 10px 7px; text-align: left; background: #f3f5f0; color: #52624f; font-size: 11px; border-bottom: 1px solid var(--line); }
+.order-items-table td { padding: 4px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); vertical-align: middle; }
+.order-items-table tr:last-child td { border-bottom: 0; }
+.order-items-table td:last-child { border-right: 0; }
+.order-items-table input, .order-items-table select { width: 100%; min-width: 0; padding: 8px 5px; border: 1px solid transparent; border-radius: 3px; font-size: 12px; background: white; }
+.order-items-table input:hover, .order-items-table select:hover { border-color: #dde3d7; }
+.order-items-table input[inputmode="numeric"] { text-align: right; }
+.order-items-table .order-item-amount { padding: 8px; text-align: right; white-space: nowrap; font-size: 12px; background: #f8f9f6; }
+.order-col-sku { width: 130px; }.order-col-name { width: auto; }.order-col-unit { width: 55px; }.order-col-qty { width: 64px; }.order-col-price { width: 105px; }.order-col-tax { width: 68px; }.order-col-total { width: 110px; }.order-col-delete { width: 36px; }
+.order-items-help { margin-top: 9px; line-height: 1.7; }
+.order-empty-row input::placeholder { color: #9ba68e; }
+.order-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.order-product-popup { display: flex; flex-direction: column; border: 1px solid #b8c5b7; border-radius: 6px; background: white; box-shadow: 0 8px 26px #20352926; overflow: hidden; }
+.order-product-results { overflow-y: auto; min-height: 0; }
+.order-product-results button { display: grid; grid-template-columns: 92px minmax(0,1fr) auto; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; text-align: left; border: 0; border-bottom: 1px solid #eef0ec; background: white; color: #32483d; font-size: 12px; }
+.order-product-results button.active { background: #edf4ec; }
+.order-product-results button strong { font-size: 11px; }.order-product-results button small { color: #718064; }
+.order-product-popup > p { margin: 0; padding: 8px 12px; border-top: 1px solid #dde3d7; color: #718064; font-size: 11px; background: #fafbf8; }

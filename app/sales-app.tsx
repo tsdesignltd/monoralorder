@@ -1,4 +1,5 @@
 "use client";
+import OrderItemsTable from "./order-items-table";
 import CustomerPicker from "./customer-picker";
 import { documentGreeting } from "../lib/document-text";
 import { apiFetch } from "../lib/client-api";
@@ -35,7 +36,6 @@ import {
   businessTypes,
   documentTypes,
   orderTotals,
-  pricedLines,
   documentTotal,
   documentTotals,
   retailLines,
@@ -61,7 +61,6 @@ import {
   type Product,
   type Order,
   type Company,
-  type Line,
   type DocumentData,
 } from "../lib/model";
 import LegacySaleView from "./legacy-sale";
@@ -244,6 +243,8 @@ export default function SalesApp({ userName }: { userName: string }) {
         order: orderSchema,
         company: companySchema,
       }[editing.kind as Exclude<Kind, "document">];
+      if (editing.kind === "order" && !(editing.data as Order).items.length)
+        throw new Error("受注明細に商品を1件以上入力してください");
       const result = schema.safeParse(editing.data);
       if (!result.success)
         throw new Error(result.error.issues.map((i) => i.message).join(" / "));
@@ -307,39 +308,6 @@ export default function SalesApp({ userName }: { userName: string }) {
     const order = editing.data as Order;
     const partyKey = orderPartyTab === "請求先" ? "billingDetails" : "customerDetails";
     update(partyKey, { ...order[partyKey], [key]: value });
-  }
-  function lineUpdate(index: number, key: string, value: unknown) {
-    if (!editing) return;
-    const data = editing.data as Order;
-    update(
-      "items",
-      data.items.map((item, i) =>
-        i === index ? { ...item, [key]: value } : item,
-      ),
-    );
-  }
-  function addLine(id: string) {
-    const p = products.find((p) => p.id === id);
-    const item: Line = p
-      ? {
-          productId: p.id,
-          name: p.data.name,
-          sku: p.data.sku,
-          price: p.data.price,
-          tax: p.data.tax,
-          unit: p.data.unit,
-          qty: 1,
-        }
-      : {
-          productId: "",
-          name: "",
-          sku: "",
-          price: 0,
-          tax: 10,
-          unit: "個",
-          qty: 1,
-        };
-    update("items", [...(editing!.data as Order).items, item]);
   }
   function exportData() {
     const blob = new Blob(
@@ -1419,116 +1387,10 @@ export default function SalesApp({ userName }: { userName: string }) {
                       )}
                       <p className="muted">この伝票の宛先情報として保存します。</p>
                     </section>
-                    <div className="line-heading">
-                      <h3>商品明細</h3>
-                      <select
-                        aria-label="商品を追加"
-                        value=""
-                        onChange={(e) => {
-                          if (e.target.value) addLine(e.target.value);
-                        }}
-                      >
-                        <option value="">＋ 商品を追加</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.data.name} / {p.data.sku}
-                          </option>
-                        ))}
-                        <option value="manual">自由入力</option>
-                      </select>
-                    </div>
-                    <div className="line-items">
-                      {(editing.data as Order).items.map((item, i) => (
-                        <div className="line-item" key={i}>
-                          <label className="line-name">
-                            商品名
-                            <input
-                              required
-                              aria-label={`明細${i + 1} 商品名`}
-                              value={item.name}
-                              onChange={(e) =>
-                                lineUpdate(i, "name", e.target.value)
-                              }
-                            />
-                          </label>
-                          <label>
-                            数量
-                            <input
-                              type="number"
-                              min={1}
-                              max={10000}
-                              required
-                              value={item.qty}
-                              onChange={(e) =>
-                                lineUpdate(i, "qty", Number(e.target.value))
-                              }
-                            />
-                          </label>
-                          <label>
-                            単位
-                            <input
-                              required
-                              value={item.unit}
-                              onChange={(e) =>
-                                lineUpdate(i, "unit", e.target.value)
-                              }
-                            />
-                          </label>
-                          <label>
-                            定価（税抜）
-                            <input
-                              type="number"
-                              min={0}
-                              max={100000000}
-                              required
-                              value={item.price}
-                              onChange={(e) =>
-                                lineUpdate(i, "price", Number(e.target.value))
-                              }
-                            />
-                          </label>
-                          <label>
-                            税率
-                            <select
-                              value={item.tax}
-                              onChange={(e) =>
-                                lineUpdate(i, "tax", Number(e.target.value))
-                              }
-                            >
-                              <option value={10}>10%</option>
-                              <option value={8}>8%</option>
-                              <option value={0}>0%</option>
-                            </select>
-                          </label>
-                          <div className="line-total">
-                            {money(
-                              pricedLines(editing.data as Order)[i].qty *
-                                pricedLines(editing.data as Order)[i].price,
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            className="icon-button"
-                            aria-label={`明細${i + 1}を取り除く`}
-                            onClick={() =>
-                              update(
-                                "items",
-                                (editing.data as Order).items.filter(
-                                  (_, j) => j !== i,
-                                ),
-                              )
-                            }
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      ))}
-                      {!(editing.data as Order).items.length && (
-                        <p className="empty-lines">
-                          商品を選択、または自由入力で明細を追加してください。
-                        </p>
-                      )}
-                    </div>
+                    <OrderItemsTable items={(editing.data as Order).items} products={products}
+                      wholesaleRate={(editing.data as Order).wholesaleRate}
+                      returns={(editing.data as Order).businessType === "返品処理"}
+                      onChange={items => update("items", items)} />
                     <div className="form-grid" style={{marginTop:20}}>
                       <Field label="送料（税込・円）" type="text" value={(editing.data as Order).shipping || 0}
                         set={(v)=>update("shipping",Number(v))} />
