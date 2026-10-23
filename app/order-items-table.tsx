@@ -2,7 +2,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-import { money, unitPrice, type Line, type Product, type Row } from "../lib/model";
+import { money, type Line, type Product, type Row } from "../lib/model";
 
 const blankLine = (): Line => ({ productId: "", sku: "", name: "", unit: "個", qty: 1, price: 0, tax: 10 });
 const normalize = (value: string) => value.normalize("NFKC").toLocaleLowerCase("ja")
@@ -29,8 +29,8 @@ function NumberCell({ value, min, max, label, required, resetKey, onChange }: {
     }} />;
 }
 
-export default function OrderItemsTable({ items, products, wholesaleRate, returns, onChange }: {
-  items: Line[]; products: Row<Product>[]; wholesaleRate: number; returns: boolean;
+export default function OrderItemsTable({ items, products, returns, onChange }: {
+  items: Line[]; products: Row<Product>[]; returns: boolean;
   onChange: (items: Line[]) => void;
 }) {
   const id = useId();
@@ -113,7 +113,7 @@ export default function OrderItemsTable({ items, products, wholesaleRate, return
     <div className="order-items-scroll">
       <table className="order-items-table">
         <colgroup><col className="order-col-sku" /><col className="order-col-name" /><col className="order-col-unit" /><col className="order-col-qty" /><col className="order-col-price" /><col className="order-col-tax" /><col className="order-col-total" /><col className="order-col-delete" /></colgroup>
-        <thead><tr><th scope="col">商品番号</th><th scope="col">商品名</th><th scope="col">単位</th><th scope="col">数量</th><th scope="col">定価（税抜）</th><th scope="col">税率</th><th scope="col">金額（仕切後）</th><th scope="col"><span className="order-sr-only">削除</span></th></tr></thead>
+        <thead><tr><th scope="col">商品番号</th><th scope="col">商品名</th><th scope="col">単位</th><th scope="col">数量</th><th scope="col">定価（税抜）</th><th scope="col">税率</th><th scope="col">金額（定価）</th><th scope="col"><span className="order-sr-only">削除</span></th></tr></thead>
         <tbody>{displayItems.map((item, row) => {
           const filled = row < items.length;
           return <tr key={rowKeys[row] || blankKey} className={filled ? "" : "order-empty-row"}>
@@ -122,7 +122,7 @@ export default function OrderItemsTable({ items, products, wholesaleRate, return
             <td><NumberCell label={`明細${row + 1} 数量`} value={filled ? item.qty : undefined} min={1} max={10000} required={filled} resetKey={item.productId} onChange={qty => change(row, { qty })} /></td>
             <td><NumberCell label={`明細${row + 1} 定価（税抜）`} value={filled ? item.price : undefined} min={0} max={100000000} required={filled} resetKey={item.productId} onChange={price => change(row, { price })} /></td>
             <td><select aria-label={`明細${row + 1} 税率`} value={item.tax} onChange={e => change(row, { tax: Number(e.target.value) as Line["tax"] })}><option value={10}>10%</option><option value={8}>8%</option><option value={0}>0%</option></select></td>
-            <td className="order-item-amount">{filled ? money(unitPrice(item.price, wholesaleRate) * item.qty * (returns ? -1 : 1)) : "—"}</td>
+            <td className="order-item-amount">{filled ? money(item.price * item.qty * (returns ? -1 : 1)) : "—"}</td>
             <td>{filled && <button type="button" className="icon-button" aria-label={`明細${row + 1}を取り除く`} onClick={() => { setActive(null); setRowKeys(keys => keys.filter((_, i) => i !== row)); onChange(items.filter((_, i) => i !== row)); }}><X size={15} /></button>}</td>
           </tr>;
         })}</tbody>

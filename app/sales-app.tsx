@@ -1304,30 +1304,6 @@ export default function SalesApp({ userName }: { userName: string }) {
                           ))}
                         </select>
                       </label>
-                      <label>
-                        仕切り率（%）
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          required
-                          pattern="[0-9]+([.][0-9]{1,2})?"
-                          title="0〜100の数値を小数第2位まで入力してください"
-                          value={wholesaleRateInput}
-                          onChange={(e) => {
-                            const input = e.currentTarget;
-                            const value = input.value.normalize("NFKC");
-                            const rate = Number(value);
-                            const valid = /^[0-9]+(?:[.][0-9]{1,2})?$/.test(value) && rate >= 0 && rate <= 100;
-                            setWholesaleRateInput(value);
-                            input.setCustomValidity(value && !valid ? "0〜100の数値を小数第2位まで入力してください" : "");
-                            if (valid) update("wholesaleRate", rate);
-                          }}
-                        />
-                        <small>
-                          定価 × 仕切り率。例：65% =
-                          定価の65%。単価の1円未満を切り捨て。
-                        </small>
-                      </label>
                       <CustomerPicker customers={customers} required
                         value={(editing.data as Order).customerId}
                         onChange={selectOrderCustomer} />
@@ -1388,23 +1364,43 @@ export default function SalesApp({ userName }: { userName: string }) {
                       <p className="muted">この伝票の宛先情報として保存します。</p>
                     </section>
                     <OrderItemsTable items={(editing.data as Order).items} products={products}
-                      wholesaleRate={(editing.data as Order).wholesaleRate}
                       returns={(editing.data as Order).businessType === "返品処理"}
                       onChange={items => update("items", items)} />
                     <div className="form-grid" style={{marginTop:20}}>
                       <Field label="送料（税込・円）" type="text" value={(editing.data as Order).shipping || 0}
                         set={(v)=>update("shipping",Number(v))} />
-                      <Field label="発送日" type="date" value={(editing.data as Order).dispatchDate || ""}
-                        set={(v)=>update("dispatchDate",v)} />
-                      <Field label="運送業者" value={(editing.data as Order).carrier || ""} set={(v)=>update("carrier",v)} />
                     </div>
                     <div className="order-totals">
                       <div>
-                        税抜小計
+                        小計（定価・税抜）
                         <strong>
-                          {money(orderTotals(editing.data as Order).subtotal)}
+                          {money(retailSubtotal(editing.data as Order))}
                         </strong>
                       </div>
+                      <div className="order-wholesale-row">
+                        <label className="order-wholesale-label">
+                          仕切り率（%）
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            required
+                            pattern="[0-9]+([.][0-9]{1,2})?"
+                            title="0〜100の数値を小数第2位まで入力してください"
+                            value={wholesaleRateInput}
+                            onChange={(e) => {
+                              const input = e.currentTarget;
+                              const value = input.value.normalize("NFKC");
+                              const rate = Number(value);
+                              const valid = /^[0-9]+(?:[.][0-9]{1,2})?$/.test(value) && rate >= 0 && rate <= 100;
+                              setWholesaleRateInput(value);
+                              input.setCustomValidity(value && !valid ? "0〜100の数値を小数第2位まで入力してください" : "");
+                              if (valid) update("wholesaleRate", rate);
+                            }}
+                          />
+                        </label>
+                        <strong>{money(orderTotals(editing.data as Order).subtotal)}</strong>
+                      </div>
+                      <small>定価 × 仕切り率。単価の1円未満を切り捨てます。</small>
                       <div>
                         消費税
                         <strong>

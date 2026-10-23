@@ -1466,3 +1466,8 @@ code {
 .order-product-results button.active { background: #edf4ec; }
 .order-product-results button strong { font-size: 11px; }.order-product-results button small { color: #718064; }
 .order-product-popup > p { margin: 0; padding: 8px 12px; border-top: 1px solid #dde3d7; color: #718064; font-size: 11px; background: #fafbf8; }
+
+.order-totals .order-wholesale-row { align-items: center; gap: 12px; }
+.modal .order-wholesale-label { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.modal .order-wholesale-label input { width: 80px; min-width: 0; padding: 7px 8px; text-align: right; }
+.order-wholesale-row strong { white-space: nowrap; }
